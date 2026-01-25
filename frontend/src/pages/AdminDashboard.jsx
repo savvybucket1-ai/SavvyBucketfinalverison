@@ -1,0 +1,893 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { getAuthHeader, getCurrentUser } from '../utils/auth';
+import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video } from 'lucide-react';
+import AdminInfluencerVideos from './AdminInfluencerVideos';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import Sidebar from '../components/DashboardSidebar';
+
+const AdminDashboard = () => {
+    const navigate = useNavigate();
+    const [pendingProducts, setPendingProducts] = useState([]);
+    const [approvedProducts, setApprovedProducts] = useState([]);
+    const [editingProduct, setEditingProduct] = useState(null);
+    const [approvalData, setApprovalData] = useState({ adminPrice: '', commission: '', title: '', description: '', moq: '', hsnCode: '', gstPercentage: '', variations: [], tieredPricing: [], category: '', stock: '', imageUrls: [] });
+
+    // Dashboard Analytics State
+    const [dashboardStats, setDashboardStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    // Filters and Search
+    const [searchTerm, setSearchTerm] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [sellerFilter, setSellerFilter] = useState('');
+
+    const [sellers, setSellers] = useState([]);
+    const [buyers, setBuyers] = useState([]);
+    const [commission, setCommission] = useState('');
+    const [commissionInput, setCommissionInput] = useState('');
+    const [orders, setOrders] = useState([]);
+
+    const location = useLocation();
+
+    useEffect(() => {
+        fetchAllData();
+        // Auto-refresh every 30 seconds
+        const interval = setInterval(() => {
+            fetchAllData();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [location.pathname]);
+
+    const fetchAllData = async () => {
+        await Promise.all([
+            fetchDashboardStats(),
+            fetchPending(),
+            fetchSellers(),
+            fetchBuyers(),
+            fetchCommission(),
+            fetchBuyers(),
+            fetchCommission(),
+            fetchOrders(),
+            fetchApproved()
+        ]);
+        setLoading(false);
+    };
+
+    const fetchDashboardStats = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/analytics/dashboard-stats', { headers: getAuthHeader() });
+            setDashboardStats(res.data);
+        } catch (err) {
+            console.error('Error fetching dashboard stats:', err);
+        }
+    };
+
+    const fetchOrders = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/orders/my-orders', { headers: getAuthHeader() });
+            setOrders(res.data);
+        } catch (err) {
+            console.error('Error fetching orders:', err);
+        }
+    };
+
+    const fetchSellers = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/auth/sellers', { headers: getAuthHeader() });
+            setSellers(res.data);
+        } catch (err) {
+            console.error('Error fetching sellers:', err);
+        }
+    };
+
+    const fetchBuyers = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/analytics/buyers', { headers: getAuthHeader() });
+            setBuyers(res.data);
+        } catch (err) {
+            console.error('Error fetching buyers:', err);
+        }
+    };
+
+    const fetchCommission = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/settings/default_commission');
+            setCommission(res.data.value);
+            setCommissionInput(res.data.value);
+        } catch (err) {
+            setCommission(10);
+            setCommissionInput(10);
+        }
+    };
+
+    const handleUpdateCommission = async () => {
+        try {
+            await axios.put('http://localhost:5000/api/settings',
+                { key: 'default_commission', value: commissionInput, description: ' Default platform commission in %' },
+                { headers: getAuthHeader() }
+            );
+            setCommission(commissionInput);
+            alert('Commission rate updated!');
+        } catch (err) {
+            alert('Failed to update commission');
+        }
+    };
+
+    const fetchPending = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/products/admin/pending', { headers: getAuthHeader() });
+            setPendingProducts(res.data);
+        } catch (err) {
+            console.error('Error fetching pending products:', err);
+        }
+    };
+
+    const fetchApproved = async () => {
+        try {
+            const res = await axios.get('http://localhost:5000/api/products/admin/approved', { headers: getAuthHeader() });
+            setApprovedProducts(res.data);
+        } catch (err) {
+            console.error('Error fetching approved products:', err);
+        }
+    };
+
+    const handleApprove = async (id, status = 'approved') => {
+        try {
+            let payload = { ...approvalData, status };
+
+            // Use the first row of tiered pricing as the main price and MOQ if available
+            if (payload.tieredPricing && payload.tieredPricing.length > 0) {
+                payload.adminPrice = payload.tieredPricing[0].price;
+                payload.moq = payload.tieredPricing[0].moq;
+            }
+
+            await axios.patch(`http://localhost:5000/api/products/admin/approve/${id}`,
+                payload,
+                { headers: getAuthHeader() }
+            );
+            setEditingProduct(null);
+            fetchPending();
+            fetchDashboardStats();
+        } catch (err) {
+            alert(`${status === 'approved' ? 'Approval' : 'Rejection'} failed`);
+        }
+    };
+
+    const handleToggleBlock = async (id) => {
+        try {
+            await axios.patch(`http://localhost:5000/api/auth/sellers/toggle-block/${id}`, {}, { headers: getAuthHeader() });
+            fetchSellers();
+        } catch (err) {
+            alert('Failed to update seller status');
+        }
+    };
+
+    // Filter pending products
+    const filteredPendingProducts = pendingProducts.filter(p => {
+        const matchesSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = !categoryFilter || p.category === categoryFilter;
+        const matchesSeller = !sellerFilter || p.sellerId?._id === sellerFilter;
+        return matchesSearch && matchesCategory && matchesSeller;
+    });
+
+    const menuItems = [
+        { label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
+        { label: 'Product Approvals', icon: Package, path: '/admin/approvals' },
+        { label: 'Orders', icon: ShoppingCart, path: '/admin/orders' },
+        { label: 'Sellers', icon: Users, path: '/admin/sellers' },
+        { label: 'Buyers', icon: UserCheck, path: '/admin/buyers' },
+        { label: 'Influencer Videos', icon: Video, path: '/admin/videos' },
+        { label: 'Commission Settings', icon: BadgePercent, path: '/admin/settings' },
+    ];
+
+    if (loading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-[#f1f5f9]">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-slate-600 font-semibold">Loading dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex min-h-screen bg-[#f1f5f9]">
+            <Sidebar menuItems={menuItems} />
+
+            <div className="flex-1">
+                {/* Header Area */}
+                <header className="bg-[#1e293b] text-white px-8 py-4 flex justify-between items-center shadow-md">
+                    <div className="flex items-center space-x-4">
+                        <span className="text-sm font-bold opacity-80 flex items-center"><Package size={16} className="mr-2" /> B2B Marketplace</span>
+                    </div>
+                    <div className="flex items-center space-x-6">
+                        <Search size={20} className="text-slate-400 cursor-pointer hover:text-white" />
+                        <div className="flex items-center space-x-3 border-l border-slate-700 pl-6 cursor-pointer group">
+                            <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center overflow-hidden">
+                                <User size={20} />
+                            </div>
+                            <span className="text-sm font-bold group-hover:text-primary transition">{getCurrentUser()?.name || 'Admin'} <ChevronRight size={14} className="inline ml-1" /></span>
+                        </div>
+                    </div>
+                </header>
+
+                <main className="p-8">
+                    <Routes>
+                        <Route path="/" element={
+                            <>
+                                {/* Enhanced Summary Cards */}
+                                <div className="grid grid-cols-4 gap-6 mb-8">
+                                    <div className="bg-[#f97316] p-6 rounded-xl shadow-lg shadow-orange-500/20 text-white relative overflow-hidden group hover:scale-[1.02] transition cursor-pointer" onClick={() => navigate('/admin/approvals')}>
+                                        <div className="relative z-10 font-bold opacity-90 text-sm">Pending Products</div>
+                                        <div className="relative z-10 text-5xl font-black mt-2">{dashboardStats?.pendingProducts || 0}</div>
+                                        <div className="absolute right-[-10px] bottom-[-10px] opacity-10 group-hover:scale-110 transition-transform">
+                                            <Package size={100} />
+                                        </div>
+                                        <div className="mt-4 border-t border-white/20 pt-2 w-16"></div>
+                                    </div>
+                                    <div className="bg-[#3b82f6] p-6 rounded-xl shadow-lg shadow-blue-500/20 text-white relative overflow-hidden group hover:scale-[1.02] transition cursor-pointer" onClick={() => navigate('/admin/sellers')}>
+                                        <div className="relative z-10 font-bold opacity-90 text-sm">Total Sellers</div>
+                                        <div className="relative z-10 text-5xl font-black mt-2">{dashboardStats?.totalSellers || 0}</div>
+                                        {dashboardStats?.monthlyGrowth?.sellers !== undefined && (
+                                            <div className={`relative z-10 text-xs mt-2 flex items-center ${dashboardStats.monthlyGrowth.sellers >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                                                {dashboardStats.monthlyGrowth.sellers >= 0 ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                                                {Math.abs(dashboardStats.monthlyGrowth.sellers)}% this month
+                                            </div>
+                                        )}
+                                        <div className="absolute right-[-10px] bottom-[-10px] opacity-10 group-hover:scale-110 transition-transform">
+                                            <Users size={100} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#22c55e] p-6 rounded-xl shadow-lg shadow-green-500/20 text-white relative overflow-hidden group hover:scale-[1.02] transition cursor-pointer" onClick={() => navigate('/admin/orders')}>
+                                        <div className="relative z-10 font-bold opacity-90 text-sm">Total Orders</div>
+                                        <div className="relative z-10 text-5xl font-black mt-2">{dashboardStats?.totalOrders || 0}</div>
+                                        {dashboardStats?.monthlyGrowth?.orders !== undefined && (
+                                            <div className={`relative z-10 text-xs mt-2 flex items-center ${dashboardStats.monthlyGrowth.orders >= 0 ? 'text-green-200' : 'text-red-200'}`}>
+                                                {dashboardStats.monthlyGrowth.orders >= 0 ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                                                {Math.abs(dashboardStats.monthlyGrowth.orders)}% this month
+                                            </div>
+                                        )}
+                                        <div className="absolute right-[-10px] bottom-[-10px] opacity-10 group-hover:scale-110 transition-transform">
+                                            <ShoppingCart size={100} />
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#8b5cf6] p-6 rounded-xl shadow-lg shadow-purple-500/20 text-white relative overflow-hidden group hover:scale-[1.02] transition cursor-pointer" onClick={() => navigate('/admin/settings')}>
+                                        <div className="relative z-10 font-bold opacity-90 text-sm">Commission Rate</div>
+                                        <div className="relative z-10 text-5xl font-black mt-2">{commission}<span className="text-2xl">%</span></div>
+                                        <div className="absolute right-[-10px] bottom-[-10px] opacity-10 group-hover:scale-110 transition-transform">
+                                            <BadgePercent size={100} />
+                                        </div>
+                                        <div className="mt-4 border-t border-white/20 pt-2 w-16"></div>
+                                    </div>
+                                </div>
+
+                                {/* New Revenue & Stats Cards */}
+                                <div className="grid grid-cols-3 gap-6 mb-8">
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Revenue</h3>
+                                            <DollarSign className="text-green-600" size={24} />
+                                        </div>
+                                        <div className="text-3xl font-black text-slate-800">₹{dashboardStats?.totalRevenue?.toLocaleString() || 0}</div>
+                                        {dashboardStats?.monthlyGrowth?.revenue !== undefined && (
+                                            <div className={`text-xs mt-2 flex items-center ${dashboardStats.monthlyGrowth.revenue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {dashboardStats.monthlyGrowth.revenue >= 0 ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
+                                                {Math.abs(dashboardStats.monthlyGrowth.revenue)}% from last month
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Admin Commission</h3>
+                                            <BadgePercent className="text-purple-600" size={24} />
+                                        </div>
+                                        <div className="text-3xl font-black text-slate-800">₹{dashboardStats?.totalCommission?.toLocaleString() || 0}</div>
+                                        <div className="text-xs mt-2 text-slate-500">From all completed orders</div>
+                                    </div>
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:scale-[1.02] transition" onClick={() => navigate('/admin/approved-products')}>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Approved Products</h3>
+                                            <Package className="text-blue-600" size={24} />
+                                        </div>
+                                        <div className="text-3xl font-black text-slate-800">{dashboardStats?.approvedProducts || 0}</div>
+                                        <div className="text-xs mt-2 text-slate-500">Live in marketplace</div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-5 gap-8">
+                                    {/* Recent Orders Table */}
+                                    <div className="col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                                            <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">Recent Orders Overview</h3>
+                                        </div>
+                                        <table className="w-full text-left">
+                                            <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                                                <tr>
+                                                    <th className="px-6 py-4">Order ID</th>
+                                                    <th className="px-6 py-4">Customer</th>
+                                                    <th className="px-6 py-4">Amount</th>
+                                                    <th className="px-6 py-4 text-right">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50 text-sm">
+                                                {orders.length > 0 ? orders.slice(0, 5).map((ord, idx) => (
+                                                    <tr key={idx} className="hover:bg-slate-50 transition">
+                                                        <td className="px-6 py-4 font-black text-slate-800">#{ord._id.slice(-6)}</td>
+                                                        <td className="px-6 py-4 text-slate-500 font-bold">{ord.buyerId?.name || 'Customer'}</td>
+                                                        <td className="px-6 py-4 font-black text-slate-700">₹{ord.totalAmount}</td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${ord.logisticsStatus === 'delivered' ? 'text-green-600 bg-green-50' :
+                                                                ord.logisticsStatus === 'dispatched' ? 'text-blue-600 bg-blue-50' :
+                                                                    'text-orange-600 bg-orange-50'
+                                                                }`}>{ord.logisticsStatus}</span>
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan="4" className="px-6 py-8 text-center text-slate-400 font-bold">No recent orders.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Recent Activity Feed */}
+                                    <div className="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                                            <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">Recent Activity</h3>
+                                        </div>
+                                        <div className="p-6 max-h-96 overflow-y-auto">
+                                            {dashboardStats?.recentActivity?.length > 0 ? (
+                                                <div className="space-y-4">
+                                                    {dashboardStats.recentActivity.map((activity, idx) => (
+                                                        <div key={idx} className="flex items-start space-x-3 text-sm">
+                                                            <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${activity.type === 'order' ? 'bg-green-500' :
+                                                                activity.type === 'approval' ? 'bg-blue-500' : 'bg-purple-500'
+                                                                }`}></div>
+                                                            <div className="flex-1">
+                                                                <p className="text-slate-700 font-medium">{activity.message}</p>
+                                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                                    {new Date(activity.time).toLocaleString()}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-center text-slate-400 py-8">No recent activity</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        } />
+                        <Route path="/approvals" element={
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                    <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">Pending Product Approvals</h3>
+                                    <div className="flex items-center space-x-3">
+                                        <input
+                                            type="text"
+                                            placeholder="Search products..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
+                                        />
+                                        <select
+                                            value={sellerFilter}
+                                            onChange={(e) => setSellerFilter(e.target.value)}
+                                            className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
+                                        >
+                                            <option value="">All Sellers</option>
+                                            {sellers.map(s => (
+                                                <option key={s._id} value={s._id}>{s.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <table className="w-full text-left">
+                                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                                        <tr>
+                                            <th className="px-6 py-4">Product</th>
+                                            <th className="px-6 py-4 text-center">Seller</th>
+                                            <th className="px-6 py-4 text-center">Seller Price</th>
+                                            <th className="px-6 py-4 text-center">MOQ</th>
+                                            <th className="px-6 py-4 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50 text-sm">
+                                        {filteredPendingProducts.length > 0 ? filteredPendingProducts.map(p => (
+                                            <tr key={p._id} className="hover:bg-slate-50 transition">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                                                            <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
+                                                        </div>
+                                                        <span className="font-bold text-slate-700">{p.title}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.sellerPrice}</td>
+                                                <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingProduct(p._id);
+                                                            setApprovalData({
+                                                                adminPrice: p.sellerPrice + (p.sellerPrice * (commission / 100)),
+                                                                commission: commission,
+                                                                title: p.title,
+                                                                description: p.description,
+                                                                moq: p.moq,
+                                                                hsnCode: p.hsnCode,
+                                                                gstPercentage: p.gstPercentage,
+                                                                variations: p.variations || [],
+                                                                tieredPricing: p.tieredPricing || [],
+                                                                category: p.category,
+                                                                stock: p.stock,
+                                                                imageUrls: p.imageUrls || []
+                                                            });
+                                                        }}
+                                                        className="bg-primary text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center ml-auto"
+                                                    >
+                                                        Review & Approve <ChevronRight size={12} className="ml-1" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No pending items found.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        } />
+                        <Route path="/orders" element={<AdminOrdersView orders={orders} />} />
+                        <Route path="/sellers" element={<SellersView sellers={sellers} handleToggleBlock={handleToggleBlock} />} />
+                        <Route path="/buyers" element={<BuyersView buyers={buyers} />} />
+                        <Route path="/approved-products" element={<ApprovedProductsView products={approvedProducts} />} />
+                        <Route path="/videos" element={<AdminInfluencerVideos />} />
+                        <Route path="/settings" element={
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
+                                <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+                                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Platform Settings</h2>
+                                </div>
+                                <div className="p-8">
+                                    <div className="mb-6">
+                                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest block mb-2">Default Commission Rate (%)</label>
+                                        <div className="flex space-x-4">
+                                            <input
+                                                type="number"
+                                                value={commissionInput}
+                                                onChange={(e) => setCommissionInput(e.target.value)}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                            />
+                                            <button
+                                                onClick={handleUpdateCommission}
+                                                className="bg-primary text-white px-6 rounded-xl font-black uppercase text-xs hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+                                            >
+                                                Update
+                                            </button>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-2 font-medium">This percentage will be applied as the default admin fee for new product approvals.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        } />
+                    </Routes>
+                </main>
+            </div>
+
+            {/* Approval Modal */}
+            {editingProduct && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full border border-slate-200 my-8">
+                        <h2 className="text-xl font-black text-slate-800 mb-6 uppercase tracking-tight flex items-center">
+                            <BadgePercent className="mr-2 text-primary" /> Product Approval & Pricing
+                        </h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Edit Title (Marketplace Display)</label>
+                                <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                    value={approvalData.title} onChange={e => setApprovalData({ ...approvalData, title: e.target.value })} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Category</label>
+                                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={approvalData.category} onChange={e => setApprovalData({ ...approvalData, category: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Stock</label>
+                                    <input type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={approvalData.stock} onChange={e => setApprovalData({ ...approvalData, stock: e.target.value })} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Edit Description</label>
+                                <textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700 h-24"
+                                    value={approvalData.description} onChange={e => setApprovalData({ ...approvalData, description: e.target.value })} />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">HSN Code</label>
+                                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={approvalData.hsnCode} onChange={e => setApprovalData({ ...approvalData, hsnCode: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">GST (%)</label>
+                                    <input type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={approvalData.gstPercentage} onChange={e => setApprovalData({ ...approvalData, gstPercentage: e.target.value })} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Admin Commission (%)</label>
+                                <div className="relative">
+                                    <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
+                                    <input type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={approvalData.commission} onChange={e => setApprovalData({ ...approvalData, commission: e.target.value })} />
+                                </div>
+                            </div>
+
+                            {/* Image Preview Section */}
+                            {approvalData.imageUrls && approvalData.imageUrls.length > 0 && (
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Product Images</label>
+                                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                        {approvalData.imageUrls.map((img, idx) => (
+                                            <div key={idx} className="w-16 h-16 rounded-lg bg-slate-100 flex-shrink-0 border border-slate-200 overflow-hidden p-1">
+                                                <img src={img} alt="" className="w-full h-full object-contain" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Variations Review Section */}
+                            {approvalData.variations && approvalData.variations.length > 0 && (
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Variations</h4>
+                                    <div className="space-y-2">
+                                        {approvalData.variations.map((v, idx) => (
+                                            <div key={idx} className="flex justify-between text-xs">
+                                                <span className="font-bold text-slate-600">{v.name}:</span>
+                                                <span className="text-slate-500 font-medium">{Array.isArray(v.values) ? v.values.join(', ') : v.values}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tiered Pricing Review Section */}
+                            {approvalData.tieredPricing && approvalData.tieredPricing.length > 0 && (
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Volume Discounts</h4>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="text-[9px] font-black uppercase text-slate-400">
+                                                <tr>
+                                                    <th className="pb-1 pr-2">MOQ</th>
+                                                    <th className="pb-1">Price</th>
+                                                    <th className="pb-1">Length</th>
+                                                    <th className="pb-1">Width</th>
+                                                    <th className="pb-1">Height</th>
+                                                    <th className="pb-1">Weight</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-200/50 font-medium text-slate-600">
+                                                {approvalData.tieredPricing.map((tp, idx) => (
+                                                    <tr key={idx}>
+                                                        <td className="py-2 text-sm font-black text-slate-700">{tp.moq}</td>
+                                                        <td className="py-1">
+                                                            <div className="relative max-w-[80px]">
+                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">₹</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full pl-5 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
+                                                                    value={tp.price}
+                                                                    onChange={(e) => {
+                                                                        const newTiers = [...approvalData.tieredPricing];
+                                                                        newTiers[idx].price = e.target.value;
+                                                                        setApprovalData({ ...approvalData, tieredPricing: newTiers });
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-1">
+                                                            <input type="number" placeholder="L" className="w-[60px] px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
+                                                                value={tp.length} onChange={e => {
+                                                                    const newTiers = [...approvalData.tieredPricing];
+                                                                    newTiers[idx].length = e.target.value;
+                                                                    setApprovalData({ ...approvalData, tieredPricing: newTiers });
+                                                                }} />
+                                                        </td>
+                                                        <td className="py-1">
+                                                            <input type="number" placeholder="B" className="w-[60px] px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
+                                                                value={tp.breadth || tp.width} onChange={e => {
+                                                                    const newTiers = [...approvalData.tieredPricing];
+                                                                    newTiers[idx].breadth = e.target.value;
+                                                                    setApprovalData({ ...approvalData, tieredPricing: newTiers });
+                                                                }} />
+                                                        </td>
+                                                        <td className="py-1">
+                                                            <input type="number" placeholder="H" className="w-[60px] px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
+                                                                value={tp.height} onChange={e => {
+                                                                    const newTiers = [...approvalData.tieredPricing];
+                                                                    newTiers[idx].height = e.target.value;
+                                                                    setApprovalData({ ...approvalData, tieredPricing: newTiers });
+                                                                }} />
+                                                        </td>
+                                                        <td className="py-1">
+                                                            <input type="number" placeholder="Wt" className="w-[60px] px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
+                                                                value={tp.weight} onChange={e => {
+                                                                    const newTiers = [...approvalData.tieredPricing];
+                                                                    newTiers[idx].weight = e.target.value;
+                                                                    setApprovalData({ ...approvalData, tieredPricing: newTiers });
+                                                                }} />
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+                            <div className="flex space-x-3 pt-6">
+                                <button onClick={() => handleApprove(editingProduct, 'approved')} className="flex-1 bg-primary text-white py-3 rounded-xl font-black uppercase text-xs shadow-lg shadow-blue-500/30 hover:bg-blue-600">Approve & Go Live</button>
+                                <button onClick={() => handleApprove(editingProduct, 'rejected')} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-black uppercase text-xs shadow-lg shadow-red-500/30 hover:bg-red-600">Reject Product</button>
+                                <button onClick={() => setEditingProduct(null)} className="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black uppercase text-xs hover:bg-slate-200 transition">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const AdminOrdersView = ({ orders }) => {
+    const handleUpdateLogistics = async (id, status) => {
+        try {
+            await axios.patch(`http://localhost:5000/api/orders/admin/update-logistics/${id}`,
+                { logisticsStatus: status },
+                { headers: getAuthHeader() }
+            );
+            window.location.reload();
+        } catch (err) {
+            alert('Logistics update failed');
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Order Logs & Logistics</h2>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                            <th className="px-6 py-4">Order ID</th>
+                            <th className="px-6 py-4 text-center">Product</th>
+                            <th className="px-6 py-4 text-center">Amount</th>
+                            <th className="px-6 py-4 text-center">Logistics</th>
+                            <th className="px-6 py-4 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-sm">
+                        {orders.length > 0 ? orders.map(o => (
+                            <tr key={o._id} className="hover:bg-slate-50 transition">
+                                <td className="px-6 py-4 font-mono text-[10px] text-slate-400">#{o._id.substring(o._id.length - 8)}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">{o.productId?.title || 'Unknown'}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{o.totalAmount}</td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${o.logisticsStatus === 'delivered' ? 'bg-green-100 text-green-600' :
+                                        o.logisticsStatus === 'dispatched' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+                                        }`}>
+                                        {o.logisticsStatus}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <select
+                                        onChange={(e) => handleUpdateLogistics(o._id, e.target.value)}
+                                        className="bg-slate-100 border-none text-[10px] font-bold rounded-lg px-2 py-1 outline-none cursor-pointer"
+                                        value={o.logisticsStatus}
+                                    >
+                                        <option value="pending">Mark Pending</option>
+                                        <option value="dispatched">Mark Dispatched</option>
+                                        <option value="delivered">Mark Delivered</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No orders found.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const SellersView = ({ sellers, handleToggleBlock }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredSellers = sellers.filter(s =>
+        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Verified Sellers</h2>
+                <input
+                    type="text"
+                    placeholder="Search sellers..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
+                />
+            </div>
+            <table className="w-full text-left">
+                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                    <tr>
+                        <th className="px-6 py-4">Seller Name</th>
+                        <th className="px-6 py-4">Email</th>
+                        <th className="px-6 py-4 text-center">Products</th>
+                        <th className="px-6 py-4 text-center">Earnings</th>
+                        <th className="px-6 py-4 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-sm">
+                    {filteredSellers.length > 0 ? filteredSellers.map(seller => (
+                        <tr key={seller._id} className="hover:bg-slate-50 transition">
+                            <td className="px-6 py-4 font-bold text-slate-700">{seller.name}</td>
+                            <td className="px-6 py-4 text-slate-500">{seller.email}</td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-700">{seller.productCount || 0}</td>
+                            <td className="px-6 py-4 text-center font-black text-green-600">₹{seller.totalEarnings || 0}</td>
+                            <td className="px-6 py-4 text-right">
+                                <button
+                                    onClick={() => handleToggleBlock(seller._id)}
+                                    className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg transition ${seller.isBlocked ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-red-600 bg-red-50 hover:bg-red-100'
+                                        }`}
+                                >
+                                    {seller.isBlocked ? 'Unblock' : 'Block'}
+                                </button>
+                            </td>
+                        </tr>
+                    )) : (
+                        <tr>
+                            <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No sellers found.</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+const BuyersView = ({ buyers }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredBuyers = buyers.filter(b =>
+        b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        b.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Registered Buyers</h2>
+                <input
+                    type="text"
+                    placeholder="Search buyers..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
+                />
+            </div>
+            <table className="w-full text-left">
+                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                    <tr>
+                        <th className="px-6 py-4">Buyer Name</th>
+                        <th className="px-6 py-4">Email</th>
+                        <th className="px-6 py-4 text-center">Total Orders</th>
+                        <th className="px-6 py-4 text-center">Total Spent</th>
+                        <th className="px-6 py-4 text-center">Joined Date</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-sm">
+                    {filteredBuyers.length > 0 ? filteredBuyers.map(buyer => (
+                        <tr key={buyer._id} className="hover:bg-slate-50 transition">
+                            <td className="px-6 py-4 font-bold text-slate-700">{buyer.name}</td>
+                            <td className="px-6 py-4 text-slate-500">{buyer.email}</td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-700">{buyer.totalOrders || 0}</td>
+                            <td className="px-6 py-4 text-center font-black text-green-600">₹{buyer.totalSpent?.toLocaleString() || 0}</td>
+                            <td className="px-6 py-4 text-center text-slate-500 text-xs">
+                                {new Date(buyer.createdAt).toLocaleDateString()}
+                            </td>
+                        </tr>
+                    )) : (
+                        <tr>
+                            <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No buyers found.</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+
+
+const ApprovedProductsView = ({ products }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredProducts = products.filter(p =>
+        p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.sellerId?.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Approved Products</h2>
+                <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
+                />
+            </div>
+            <table className="w-full text-left">
+                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
+                    <tr>
+                        <th className="px-6 py-4">Product</th>
+                        <th className="px-6 py-4 text-center">Seller</th>
+                        <th className="px-6 py-4 text-center">Price</th>
+                        <th className="px-6 py-4 text-center">Stock</th>
+                        <th className="px-6 py-4 text-right">Status</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-sm">
+                    {filteredProducts.length > 0 ? filteredProducts.map(p => (
+                        <tr key={p._id} className="hover:bg-slate-50 transition">
+                            <td className="px-6 py-4">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                                        <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
+                                    </div>
+                                    <span className="font-bold text-slate-700">{p.title}</span>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                                <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.adminPrice}</td>
+                            <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
+                            <td className="px-6 py-4 text-right">
+                                <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-green-600 bg-green-50">Live</span>
+                            </td>
+                        </tr>
+                    )) : (
+                        <tr>
+                            <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No approved products found.</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+export default AdminDashboard;

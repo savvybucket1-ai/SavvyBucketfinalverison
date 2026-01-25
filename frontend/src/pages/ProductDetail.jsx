@@ -1,0 +1,433 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { ChevronLeft, ChevronRight, Star, Truck, Heart, Minus, Plus, ShieldCheck, Lock, BadgePercent, ChevronDown } from 'lucide-react';
+import { getCurrentUser } from '../utils/auth';
+
+const ProductDetail = () => {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [product, setProduct] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [selectedImage, setSelectedImage] = useState(0);
+    const [quantity, setQuantity] = useState(1);
+    const [activeTab, setActiveTab] = useState('description');
+    const [pincode, setPincode] = useState('');
+    const [selectedOptions, setSelectedOptions] = useState({});
+    const [shippingInfo, setShippingInfo] = useState(null);
+    const [stepQuantity, setStepQuantity] = useState(1);
+    const [showQtyDropdown, setShowQtyDropdown] = useState(false);
+    const user = getCurrentUser();
+
+    useEffect(() => {
+        axios.get(`http://localhost:5000/api/products/${id}`)
+            .then(res => {
+                setProduct(res.data);
+                const initialMoq = res.data.moq || 1;
+                setQuantity(initialMoq);
+                setStepQuantity(initialMoq);
+
+                // Initialize default variations
+                if (res.data.variations?.length > 0) {
+                    const defaults = {};
+                    res.data.variations.forEach(v => {
+                        if (v.values?.length > 0) defaults[v.name] = v.values[0];
+                    });
+                    setSelectedOptions(defaults);
+                }
+
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error('Error fetching product:', err);
+                setLoading(false);
+            });
+    }, [id]);
+
+    const handleQuantityChange = (delta) => {
+        const newQty = quantity + delta;
+        if (newQty >= (product?.moq || 1)) {
+            setQuantity(newQty);
+        }
+    };
+
+
+
+    const getPriceForQuantity = (qty) => {
+        if (!product) return 0;
+        let price = product.adminPrice;
+        if (product.tieredPricing && product.tieredPricing.length > 0) {
+            // Sort tiers by MOQ descending to find the best price
+            const sortedTiers = [...product.tieredPricing].sort((a, b) => b.moq - a.moq);
+            const applicableTier = sortedTiers.find(tier => qty >= tier.moq);
+            if (applicableTier) {
+                price = applicableTier.price;
+            }
+        }
+        return price;
+    };
+
+    const currentUnitPrice = getPriceForQuantity(quantity);
+    const totalPriceWithGST = Math.round(currentUnitPrice * (1 + (product?.gstPercentage || 0) / 100));
+    const totalOrderValue = totalPriceWithGST * quantity;
+
+    const availableQuantities = product ? [
+        product.moq,
+        ...(product.tieredPricing || []).map(t => t.moq)
+    ].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b) : [];
+
+    const handleCheckShipping = () => {
+        if (pincode.length === 6) {
+            // Simulate shipping check
+            setShippingInfo({
+                available: true,
+                cost: 45,
+                courier: 'Delhivery Courier',
+                days: '3-5 Days'
+            });
+        }
+    };
+
+    const handleAddToCart = () => {
+        const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
+        const existingItem = existingCart.find(item => item._id === product._id);
+
+        if (existingItem) {
+            existingItem.quantity += quantity;
+        } else {
+            existingCart.push({ ...product, quantity });
+        }
+
+        localStorage.setItem('cart', JSON.stringify(existingCart));
+
+        // Dispatch event to update cart count in Navbar
+        window.dispatchEvent(new Event('cartUpdated'));
+
+        alert(`Added ${quantity} x ${product.title} to cart!`);
+    };
+
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full"></div>
+            </div>
+        );
+    }
+
+    if (!product) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+                <h1 className="text-2xl font-bold text-slate-800 mb-4">Product not found</h1>
+                <Link to="/" className="text-primary hover:underline">← Back to Home</Link>
+            </div>
+        );
+    }
+
+
+
+
+    return (
+        <div className="min-h-screen bg-slate-50">
+            <div className="max-w-[1440px] mx-auto px-6 py-6">
+                {/* Breadcrumb */}
+                <div className="flex items-center gap-2 text-sm mb-6">
+                    <Link to="/" className="text-slate-500 hover:text-primary flex items-center gap-1">
+                        <ChevronLeft size={16} />
+                        Home
+                    </Link>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-500">{product.category}</span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-800 font-semibold">{product.title}</span>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                    {/* Image Gallery */}
+                    <div className="flex flex-col-reverse md:flex-row gap-4">
+                        {/* Thumbnails */}
+                        <div className="flex md:flex-col gap-3 overflow-x-auto md:overflow-visible no-scrollbar">
+                            {product.imageUrls?.map((img, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setSelectedImage(idx)}
+                                    className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${selectedImage === idx
+                                        ? 'border-primary shadow-lg shadow-primary/20'
+                                        : 'border-slate-200 hover:border-slate-300'
+                                        }`}
+                                >
+                                    <img src={img} alt={`${product.title} ${idx + 1}`} className="w-full h-full object-cover" />
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Main Image */}
+                        <div className="flex-1 bg-white rounded-3xl overflow-hidden relative group aspect-square md:aspect-auto md:h-[500px]">
+                            <img
+                                src={product.imageUrls?.[selectedImage] || 'https://via.placeholder.com/500'}
+                                alt={product.title}
+                                className="w-full h-full object-contain p-6"
+                            />
+                            {product.imageUrls?.length > 1 && (
+                                <>
+                                    <button
+                                        onClick={() => setSelectedImage(prev => prev > 0 ? prev - 1 : product.imageUrls.length - 1)}
+                                        className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <ChevronLeft size={20} />
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedImage(prev => prev < product.imageUrls.length - 1 ? prev + 1 : 0)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <ChevronRight size={20} />
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Product Details */}
+                    <div className="flex flex-col">
+                        {/* Title & Rating */}
+                        <h1 className="text-3xl font-bold text-slate-800 mb-3">{product.title}</h1>
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="flex items-center gap-1">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <Star
+                                        key={star}
+                                        size={16}
+                                        className={star <= 4 ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}
+                                    />
+                                ))}
+                            </div>
+                            <span className="text-sm text-slate-500">(675 Reviews)</span>
+                            <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-red-500">
+                                <Heart size={16} /> Wishlist
+                            </button>
+                        </div>
+
+                        {/* Variations Selections */}
+                        {product.variations?.length > 0 && (
+                            <div className="space-y-4 mb-6">
+                                {product.variations.map((v, idx) => (
+                                    <div key={idx}>
+                                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">{v.name}</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {v.values.map((val, vIdx) => (
+                                                <button
+                                                    key={vIdx}
+                                                    onClick={() => setSelectedOptions(prev => ({ ...prev, [v.name]: val }))}
+                                                    className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-all ${selectedOptions[v.name] === val
+                                                        ? 'border-primary bg-primary/5 text-primary'
+                                                        : 'border-slate-200 hover:border-slate-300 text-slate-600 bg-white'
+                                                        }`}
+                                                >
+                                                    {val}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Price */}
+                        {/* Price */}
+                        <div className="flex flex-col mb-6">
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-4xl font-black text-slate-800">₹{totalPriceWithGST.toLocaleString()}</span>
+                                <span className="text-sm font-bold text-slate-500">(Incl. of all taxes)</span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-lg font-bold text-slate-600">₹{currentUnitPrice.toLocaleString()}</span>
+                                <span className="text-sm font-medium text-slate-400">+ {product.gstPercentage}% GST</span>
+                            </div>
+                            {quantity > 1 && (
+                                <div className="mt-1 text-primary font-bold text-sm">
+                                    Total Value: ₹{totalOrderValue.toLocaleString()}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Quantity Selector with MOQ Dropdown */}
+                        <div className="flex items-center gap-4 mb-6 relative">
+                            <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setShowQtyDropdown(!showQtyDropdown)}
+                                        className="min-w-[100px] h-12 px-4 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-between hover:border-primary transition-colors cursor-pointer"
+                                    >
+                                        <span className="text-xl font-bold text-slate-800">{stepQuantity}</span>
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${showQtyDropdown ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {showQtyDropdown && (
+                                        <div className="absolute bottom-full left-0 mb-2 w-full bg-white border-2 border-slate-100 rounded-xl shadow-xl z-50 overflow-hidden">
+                                            {availableQuantities.map((qty) => (
+                                                <button
+                                                    key={qty}
+                                                    onClick={() => {
+                                                        setStepQuantity(qty);
+                                                        setQuantity(qty);
+                                                        setShowQtyDropdown(false);
+                                                    }}
+                                                    className={`w-full px-4 py-3 text-left font-bold text-sm hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${stepQuantity === qty ? 'bg-primary/5 text-primary' : 'text-slate-700'
+                                                        }`}
+                                                >
+                                                    {qty}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center h-12 bg-primary/5 rounded-xl border-2 border-primary/20 overflow-hidden">
+                                    <button
+                                        onClick={() => {
+                                            if (quantity > stepQuantity) {
+                                                setQuantity(quantity - stepQuantity);
+                                            }
+                                        }}
+                                        disabled={quantity <= stepQuantity}
+                                        className="w-10 h-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                                    >
+                                        <Minus size={16} />
+                                    </button>
+                                    <span className="min-w-[40px] px-2 text-center font-black text-primary">
+                                        {quantity}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            setQuantity(quantity + stepQuantity);
+                                        }}
+                                        className="w-10 h-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+                            </div>
+                            <span className="text-base font-medium text-slate-600">
+                                Minimum Order Quantity- {product.moq}
+                            </span>
+                        </div>
+
+                        {/* Tiered Pricing / Volume Discounts */}
+
+
+                        {/* Category */}
+                        <div className="text-sm text-slate-500 mb-6">
+                            Category: <span className="font-semibold text-slate-800">{product.category}</span>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="border-b border-slate-200 mb-4">
+                            <div className="flex gap-8">
+                                <button
+                                    onClick={() => setActiveTab('description')}
+                                    className={`pb-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'description'
+                                        ? 'border-primary text-primary'
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        }`}
+                                >
+                                    Description
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('specifications')}
+                                    className={`pb-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'specifications'
+                                        ? 'border-primary text-primary'
+                                        : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        }`}
+                                >
+                                    Specifications
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="text-slate-600 text-sm leading-relaxed mb-6">
+                            {activeTab === 'description' ? (
+                                <p>{product.description}</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    <p><strong>HSN Code:</strong> {product.hsnCode}</p>
+                                    <p><strong>GST:</strong> {product.gstPercentage}%</p>
+                                    <p><strong>Stock Available:</strong> {product.stock} units</p>
+                                    <p><strong>Category:</strong> {product.category}</p>
+                                    {product.weight && <p><strong>Weight:</strong> {product.weight} kg</p>}
+                                    {product.dimensions && (
+                                        <p><strong>Dimensions (L×B×H):</strong> {product.dimensions.length} × {product.dimensions.breadth} × {product.dimensions.height} cm</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Shipping Calculator */}
+                        <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-sm font-semibold text-slate-700">Calculate Shipping:</span>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="110021"
+                                        value={pincode}
+                                        onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
+                                    />
+                                    <button
+                                        onClick={handleCheckShipping}
+                                        className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
+                                    >
+                                        CHECK
+                                    </button>
+                                </div>
+                            </div>
+
+                            {shippingInfo && (
+                                <div className="flex items-start gap-3 pt-3 border-t border-slate-100">
+                                    <div className="w-24">
+                                        <img src="/shiprocket-logo.png" alt="Shiprocket" className="h-6" onError={(e) => e.target.style.display = 'none'} />
+                                        <span className="text-xs font-bold text-slate-600">🚀 Shiprocket</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-green-600">✓</span>
+                                            <span className="font-semibold">Delivery: ₹{shippingInfo.cost}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500">{shippingInfo.courier} • {shippingInfo.days}</p>
+                                        <p className="text-xs text-slate-400 mt-1">*Estimated delivery time based on your pincode</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-4 mb-4">
+                            <button
+                                onClick={handleAddToCart}
+                                className="flex-1 py-4 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary/5 transition-colors"
+                            >
+                                ADD TO CART
+                            </button>
+                        </div>
+
+                        {/* Trust Badges */}
+                        <div className="flex items-center justify-center gap-6 text-xs text-slate-500">
+                            <div className="flex items-center gap-1">
+                                <Lock size={14} />
+                                <span>Secure Payment</span>
+                            </div>
+                            <span className="text-slate-300">|</span>
+                            <div className="flex items-center gap-1">
+                                <ShieldCheck size={14} />
+                                <span>Buyer Protection</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default ProductDetail;
