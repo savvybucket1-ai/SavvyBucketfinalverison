@@ -1,35 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader, getCurrentUser, logout } from '../utils/auth';
-import { LayoutDashboard, Package, ShoppingCart, IndianRupee, Search, ChevronRight, User, PlusCircle, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, IndianRupee, Search, ChevronRight, User, PlusCircle, Clock, CheckCircle, XCircle, Truck, FileText, Menu, Download, Loader2 } from 'lucide-react';
 import { Routes, Route } from 'react-router-dom';
 import Sidebar from '../components/DashboardSidebar';
+import { categories } from '../utils/categories';
+import ShipmentManager from '../components/ShipmentManager';
+
+import API_BASE_URL from '../config';
 
 const SellerDashboard = () => {
     const [products, setProducts] = useState([]);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [showAddForm, setShowAddForm] = useState(false);
     const [isEdit, setIsEdit] = useState(false);
     const [editId, setEditId] = useState(null);
-    const [formData, setFormData] = useState({ title: '', description: '', moq: 1, stock: 0, category: '', hsnCode: '', gstPercentage: '', customCategory: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false); // New state to prevent double clicks
+    const [formData, setFormData] = useState({ title: '', description: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' });
     const [variations, setVariations] = useState([]);
     const [tieredPricing, setTieredPricing] = useState([]);
-
-    // Common product categories for B2B marketplace
-    // Common product categories for B2B marketplace
-    const categories = [
-        'Gifting Products',
-        'Electronic Gadgets',
-        'Bottles and Tumblers',
-        'Kitchen Ware',
-        'Lamp & Projector',
-        'Ceramic Mugs',
-        'Tripod and Stands',
-        'Toys and Games',
-        'Clothing',
-        'Statutes and Sculptures',
-        'Sublimation Products',
-        'Product Manufacturing'
-    ];
 
     // Common GST slabs in India
     const gstSlabs = [0, 3, 5, 18, 28];
@@ -38,6 +27,30 @@ const SellerDashboard = () => {
 
     // New State for Orders
     const [orders, setOrders] = useState([]);
+    const [managedOrder, setManagedOrder] = useState(null);
+    const [activeTab, setActiveTab] = useState('New');
+
+    const tabs = [
+        { name: 'New', count: orders.filter(o => o.logisticsStatus === 'pending').length },
+        { name: 'Ready To Ship', count: orders.filter(o => ['ready-to-ship', 'awb-assigned'].includes(o.logisticsStatus)).length },
+        { name: 'Pickups & Manifests', count: orders.filter(o => ['pickup-scheduled', 'manifest-generated'].includes(o.logisticsStatus)).length },
+        { name: 'In Transit', count: orders.filter(o => ['shipped', 'in-transit'].includes(o.logisticsStatus)).length },
+        { name: 'Delivered', count: orders.filter(o => o.logisticsStatus === 'delivered').length },
+        { name: 'Cancelled', count: orders.filter(o => ['cancelled', 'canceled', 'rto'].includes(o.logisticsStatus)).length },
+        { name: 'All', count: orders.length }
+    ];
+
+    const getFilteredOrders = () => {
+        switch (activeTab) {
+            case 'New': return orders.filter(o => o.logisticsStatus === 'pending');
+            case 'Ready To Ship': return orders.filter(o => ['ready-to-ship', 'awb-assigned'].includes(o.logisticsStatus));
+            case 'Pickups & Manifests': return orders.filter(o => ['pickup-scheduled', 'manifest-generated'].includes(o.logisticsStatus));
+            case 'In Transit': return orders.filter(o => ['shipped', 'in-transit'].includes(o.logisticsStatus));
+            case 'Delivered': return orders.filter(o => o.logisticsStatus === 'delivered');
+            case 'Cancelled': return orders.filter(o => ['cancelled', 'canceled', 'rto'].includes(o.logisticsStatus));
+            default: return orders;
+        }
+    };
 
     useEffect(() => {
         fetchProducts();
@@ -46,7 +59,7 @@ const SellerDashboard = () => {
 
     const fetchOrders = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/orders/my-orders', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/orders/my-orders`, { headers: getAuthHeader() });
             setOrders(res.data);
             console.log("Orders fetched:", res.data); // Debug log
         } catch (err) {
@@ -56,7 +69,7 @@ const SellerDashboard = () => {
 
     const fetchProducts = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/products/seller/list', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/products/seller/list`, { headers: getAuthHeader() });
             setProducts(res.data);
         } catch (err) {
             console.error('Error fetching products:', err);
@@ -65,11 +78,31 @@ const SellerDashboard = () => {
 
     const handleAddProduct = async (e) => {
         e.preventDefault();
+        if (isSubmitting) return;
+
         // Validate HSN code
         if (!formData.hsnCode || formData.hsnCode.length < 6) {
             alert('HSN Code must be at least 6 digits');
             return;
         }
+        if (!formData.gstPercentage) {
+            alert('Please select a GST Percentage');
+            return;
+        }
+
+        // Validate Pricing
+        if (tieredPricing.length === 0) {
+            alert('Please add at least one pricing tier (MOQ & Price).');
+            return;
+        }
+
+        // Validate Images
+        if (selectedFiles.length === 0 && previews.length === 0) {
+            alert('Please upload at least one product image.');
+            return;
+        }
+
+        setIsSubmitting(true);
 
         try {
             const data = new FormData();
@@ -80,6 +113,9 @@ const SellerDashboard = () => {
             data.append('stock', formData.stock);
             const finalCategory = formData.category === 'Add New Category' ? formData.customCategory : formData.category;
             data.append('category', finalCategory);
+            // Append subCategory if distinct from custom/new category
+            data.append('subCategory', formData.category === 'Add New Category' ? '' : formData.subCategory);
+
             data.append('hsnCode', formData.hsnCode);
             data.append('gstPercentage', formData.gstPercentage);
 
@@ -91,6 +127,12 @@ const SellerDashboard = () => {
             if (tieredPricing.length > 0) {
                 const sorted = [...tieredPricing].sort((a, b) => a.moq - b.moq);
                 derivedSellerPrice = sorted[0].price;
+
+                // Also set base dimensions/weight from the first tier
+                if (sorted[0].weight) data.append('weight', sorted[0].weight);
+                if (sorted[0].length) data.append('length', sorted[0].length);
+                if (sorted[0].breadth) data.append('breadth', sorted[0].breadth);
+                if (sorted[0].height) data.append('height', sorted[0].height);
             }
             data.append('sellerPrice', derivedSellerPrice);
 
@@ -99,12 +141,12 @@ const SellerDashboard = () => {
 
             if (isEdit) {
                 // Update existing product
-                await axios.put(`http://localhost:5000/api/products/seller/update/${editId}`, data, {
+                await axios.put(`${API_BASE_URL}/api/products/seller/update/${editId}`, data, {
                     headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' }
                 });
             } else {
                 // Add new product
-                await axios.post('http://localhost:5000/api/products/seller/add', data, {
+                await axios.post(`${API_BASE_URL}/api/products/seller/add`, data, {
                     headers: { ...getAuthHeader(), 'Content-Type': 'multipart/form-data' }
                 });
             }
@@ -112,7 +154,7 @@ const SellerDashboard = () => {
             setShowAddForm(false);
             setIsEdit(false);
             setEditId(null);
-            setFormData({ title: '', description: '', sellerPrice: '', moq: 1, stock: 0, category: '', hsnCode: '', gstPercentage: '', customCategory: '' });
+            setFormData({ title: '', description: '', sellerPrice: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' });
             setVariations([]);
             setTieredPricing([]);
             setSelectedFiles([]);
@@ -120,17 +162,20 @@ const SellerDashboard = () => {
             fetchProducts();
         } catch (err) {
             alert('Error processing product: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     const handleEditClick = (product) => {
-        const isCustom = !categories.includes(product.category);
+        const isCustom = !categories.find(c => c.name === product.category);
         setFormData({
             title: product.title,
             description: product.description,
             moq: product.moq,
             stock: product.stock,
             category: isCustom ? 'Add New Category' : product.category,
+            subCategory: product.subCategory || '',
             customCategory: isCustom ? product.category : '',
             hsnCode: product.hsnCode,
             gstPercentage: product.gstPercentage,
@@ -154,18 +199,12 @@ const SellerDashboard = () => {
     };
 
     const removeImage = (index) => {
-        // If it's a new file, we need to handle selectedFiles too
-        // We'll keep track by comparing index. 
-        // This is a bit tricky if previews = [existingUrls, newBlobUrls]
-        // Let's assume for simplicity we just remove from state and it works.
         setPreviews(prev => prev.filter((_, i) => i !== index));
-        // We'd also need to adjust selectedFiles if we knew which index it was.
-        // For now, let's just fix the appending which is the main issue.
     };
 
     const handleUpdateStock = async (id, currentAvailable, currentStock) => {
         try {
-            await axios.patch(`http://localhost:5000/api/products/seller/update-stock/${id}`,
+            await axios.patch(`${API_BASE_URL}/api/products/seller/update-stock/${id}`,
                 { isAvailable: !currentAvailable, stock: currentStock },
                 { headers: getAuthHeader() }
             );
@@ -188,37 +227,119 @@ const SellerDashboard = () => {
         approved: products.filter(p => p.status === 'approved').length,
     };
 
+    const [profile, setProfile] = useState(null);
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [editMode, setEditMode] = useState(false);
+    const [profileFormData, setProfileFormData] = useState({ name: '', phone: '', pickupAddress: '', shiprocketNickname: '', gstNumber: '' });
+    const [loading, setLoading] = useState(false);
+
+    const handleUpdateProfile = async () => {
+        try {
+            setLoading(true);
+            const res = await axios.put(`${API_BASE_URL}/api/auth/profile`, profileFormData, {
+                headers: getAuthHeader()
+            });
+            setProfile(res.data.user);
+            setEditMode(false);
+            alert('Profile updated successfully!');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to update profile: ' + (err.response?.data?.error || err.message));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleProfileClick = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/auth/profile`, { headers: getAuthHeader() });
+            const userData = res.data;
+            setProfile(userData);
+            // Pre-fill pickup form with saved data
+            if (userData.pickupAddressDetails?.locationName) {
+                setPickupForm({
+                    locationName: userData.pickupAddressDetails.locationName || '',
+                    name: userData.pickupAddressDetails.name || '',
+                    phone: userData.pickupAddressDetails.phone || '',
+                    address: userData.pickupAddressDetails.address || '',
+                    address2: userData.pickupAddressDetails.address2 || '',
+                    city: userData.pickupAddressDetails.city || '',
+                    state: userData.pickupAddressDetails.state || '',
+                    pincode: userData.pickupAddressDetails.pincode || ''
+                });
+            }
+            setShowProfileModal(true);
+        } catch (err) {
+            console.error(err);
+            alert('Failed to fetch profile');
+        }
+    };
+
+    const [profileTab, setProfileTab] = useState('profile');
+    const [pickupForm, setPickupForm] = useState({ locationName: '', name: '', phone: '', address: '', address2: '', city: '', state: '', pincode: '' });
+    const [pickupLoading, setPickupLoading] = useState(false);
+    const [pickupError, setPickupError] = useState('');
+
+    const handleRegisterPickup = async () => {
+        setPickupError('');
+        const { locationName, name, phone, address, city, state, pincode } = pickupForm;
+        if (!locationName || !name || !phone || !address || !city || !state || !pincode) {
+            setPickupError('Please fill all required fields (*)');
+            return;
+        }
+        if (pincode.length !== 6) {
+            setPickupError('Pincode must be exactly 6 digits');
+            return;
+        }
+        try {
+            setPickupLoading(true);
+            await axios.post(`${API_BASE_URL}/api/shipments/register-pickup`, pickupForm, { headers: getAuthHeader() });
+            // Refresh profile to show updated status
+            const res = await axios.get(`${API_BASE_URL}/api/auth/profile`, { headers: getAuthHeader() });
+            setProfile(res.data);
+            alert('✅ Pickup address registered successfully with ShipRocket! Future orders will use this address automatically.');
+        } catch (err) {
+            const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+            setPickupError(msg);
+        } finally {
+            setPickupLoading(false);
+        }
+    };
+
     return (
         <div className="flex min-h-screen bg-[#f1f5f9]">
-            <Sidebar menuItems={menuItems} />
+            <Sidebar menuItems={menuItems} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
                 {/* Header Area */}
-                <header className="bg-[#1e293b] text-white px-8 py-4 flex justify-between items-center shadow-md">
+                <header className="bg-[#1e293b] text-white px-4 md:px-8 py-4 flex justify-between items-center shadow-md sticky top-0 z-30">
                     <div className="flex items-center space-x-4">
+                        <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1.5 hover:bg-slate-700 rounded-lg transition">
+                            <Menu size={20} />
+                        </button>
                         <span className="text-sm font-bold opacity-80 flex items-center"><Package size={16} className="mr-2" /> B2B Marketplace</span>
                     </div>
                     <div className="flex items-center space-x-6">
                         <Search size={20} className="text-slate-400 cursor-pointer hover:text-white" />
-                        <div className="flex items-center space-x-3 border-l border-slate-700 pl-6 cursor-pointer group">
+                        <div onClick={handleProfileClick} className="flex items-center space-x-3 border-l border-slate-700 pl-4 md:pl-6 cursor-pointer group">
                             <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center overflow-hidden">
                                 <User size={20} />
                             </div>
-                            <span className="text-sm font-bold group-hover:text-primary transition">{getCurrentUser()?.name || 'Seller'} <ChevronRight size={14} className="inline ml-1" /></span>
+                            <span className="hidden md:flex text-sm font-bold group-hover:text-primary transition items-center">{getCurrentUser()?.name || 'Seller'} <ChevronRight size={14} className="inline ml-1" /></span>
                         </div>
                     </div>
                 </header>
 
-                <main className="p-8">
+                <main className="p-4 md:p-8">
                     <Routes>
                         <Route path="/" element={
                             <>
                                 {/* Welcome & Action Bar */}
-                                <div className="flex justify-between items-center mb-8">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                                     <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Seller Dashboard</h1>
                                     <button
-                                        onClick={() => { setIsEdit(false); setFormData({ title: '', description: '', moq: 1, stock: 0, category: '', hsnCode: '', gstPercentage: '', customCategory: '' }); setVariations([]); setTieredPricing([]); setShowAddForm(true); }}
-                                        className="bg-primary text-white px-6 py-2.5 rounded-xl font-black uppercase text-xs flex items-center space-x-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+                                        onClick={() => { setIsEdit(false); setFormData({ title: '', description: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' }); setVariations([]); setTieredPricing([]); setShowAddForm(true); }}
+                                        className="bg-primary text-white px-6 py-2.5 rounded-xl font-black uppercase text-xs flex items-center space-x-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 w-full md:w-auto justify-center"
                                     >
                                         <PlusCircle size={18} />
                                         <span>Add New Product</span>
@@ -226,7 +347,7 @@ const SellerDashboard = () => {
                                 </div>
 
                                 {/* Summary Cards */}
-                                <div className="grid grid-cols-4 gap-6 mb-8">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                                     <div className="bg-[#3b82f6] p-6 rounded-xl shadow-lg shadow-blue-500/20 text-white relative overflow-hidden group">
                                         <div className="relative z-10 font-bold opacity-90 text-sm">My Products</div>
                                         <div className="relative z-10 text-5xl font-black mt-2">{stats.total}</div>
@@ -264,40 +385,42 @@ const SellerDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-5 gap-8">
+                                <div className="grid grid-cols-1 gap-8">
                                     {/* Recent Orders Table */}
-                                    <div className="col-span-5 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                                             <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">Recent Orders Overview</h3>
                                         </div>
-                                        <table className="w-full text-left">
-                                            <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                                                <tr>
-                                                    <th className="px-6 py-4">Order ID</th>
-                                                    <th className="px-6 py-4">Amount</th>
-                                                    <th className="px-6 py-4 text-right">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-50 text-sm">
-                                                {orders.length > 0 ? orders.slice(0, 5).map((ord, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-50 transition">
-                                                        <td className="px-6 py-4 font-black text-slate-800">#{ord._id.slice(-6)}</td>
-                                                        <td className="px-6 py-4 font-black text-slate-700">₹{ord.totalAmount}</td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${ord.orderStatus === 'processing' ? 'text-blue-600 bg-blue-50' :
-                                                                ord.orderStatus === 'shipped' ? 'text-green-600 bg-green-50' :
-                                                                    ord.orderStatus === 'delivered' ? 'text-emerald-700 bg-emerald-50' :
-                                                                        'text-slate-600 bg-slate-50'
-                                                                }`}>{ord.orderStatus}</span>
-                                                        </td>
-                                                    </tr>
-                                                )) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                                                     <tr>
-                                                        <td colSpan="3" className="px-6 py-8 text-center text-slate-400 font-bold italic">No recent orders.</td>
+                                                        <th className="px-6 py-4">Order ID</th>
+                                                        <th className="px-6 py-4">Amount</th>
+                                                        <th className="px-6 py-4 text-right">Status</th>
                                                     </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50 text-sm">
+                                                    {orders.length > 0 ? orders.slice(0, 5).map((ord, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50 transition">
+                                                            <td className="px-6 py-4 font-black text-slate-800">#{ord._id.slice(-6)}</td>
+                                                            <td className="px-6 py-4 font-black text-slate-700">₹{ord.totalAmount}</td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${ord.orderStatus === 'processing' ? 'text-blue-600 bg-blue-50' :
+                                                                    ord.orderStatus === 'shipped' ? 'text-green-600 bg-green-50' :
+                                                                        ord.orderStatus === 'delivered' ? 'text-emerald-700 bg-emerald-50' :
+                                                                            'text-slate-600 bg-slate-50'
+                                                                    }`}>{ord.orderStatus}</span>
+                                                            </td>
+                                                        </tr>
+                                                    )) : (
+                                                        <tr>
+                                                            <td colSpan="3" className="px-6 py-8 text-center text-slate-400 font-bold italic">No recent orders.</td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             </>
@@ -307,7 +430,7 @@ const SellerDashboard = () => {
                                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                     <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">My Products</h3>
                                     <button
-                                        onClick={() => { setIsEdit(false); setFormData({ title: '', description: '', moq: 1, stock: 0, category: '', hsnCode: '', gstPercentage: '', customCategory: '' }); setVariations([]); setTieredPricing([]); setShowAddForm(true); }}
+                                        onClick={() => { setIsEdit(false); setFormData({ title: '', description: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' }); setVariations([]); setTieredPricing([]); setShowAddForm(true); }}
                                         className="bg-primary text-white px-4 py-2 rounded-lg font-black uppercase text-[10px] flex items-center space-x-2 hover:bg-blue-600 transition shadow-sm shadow-blue-200"
                                     >
                                         <PlusCircle size={14} />
@@ -321,9 +444,9 @@ const SellerDashboard = () => {
                                             <th className="px-6 py-4 text-center">Seller Price</th>
                                             <th className="px-6 py-4 text-center">MOQ</th>
                                             <th className="px-6 py-4 text-center">Stock</th>
-                                            <th className="px-6 py-4 text-center">Live Status</th>
+
                                             <th className="px-6 py-4 text-center">Approval</th>
-                                            <th className="px-6 py-4 text-right">Actions</th>
+                                            <th className="px-6 py-4 text-center">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50 text-sm">
@@ -343,25 +466,18 @@ const SellerDashboard = () => {
                                                 <td className="px-6 py-4 text-center font-bold text-slate-500">₹{p.sellerPrice || 0}</td>
                                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
                                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <button
-                                                        onClick={() => handleUpdateStock(p._id, p.isAvailable, p.stock)}
-                                                        className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition shadow-sm ${p.isAvailable ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
-                                                    >
-                                                        {p.isAvailable ? 'Active' : 'Off'}
-                                                    </button>
-                                                </td>
+
                                                 <td className="px-6 py-4 text-center">
                                                     {p.status === 'pending' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-orange-600 bg-orange-50">Pending</span>}
                                                     {p.status === 'approved' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-green-600 bg-green-50">Approved</span>}
                                                     {p.status === 'rejected' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-red-600 bg-red-50">Rejected</span>}
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
+                                                <td className="px-6 py-4 text-center">
                                                     <button
-                                                        onClick={() => handleEditClick(p)}
-                                                        className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-blue-600 bg-blue-50 hover:bg-blue-100 transition"
+                                                        onClick={() => handleUpdateStock(p._id, p.isAvailable, p.stock)}
+                                                        className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition shadow-sm border ${p.isAvailable ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
                                                     >
-                                                        Edit
+                                                        {p.isAvailable ? 'Out of Stock' : 'In Stock'}
                                                     </button>
                                                 </td>
                                             </tr>
@@ -375,43 +491,136 @@ const SellerDashboard = () => {
                             </div>
                         } />
                         <Route path="/orders" element={
-                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                                <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                                    <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">My Orders</h3>
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[calc(100vh-140px)]">
+                                {/* Tabs */}
+                                <div className="flex border-b border-slate-200 overflow-x-auto">
+                                    {tabs.map(tab => (
+                                        <button
+                                            key={tab.name}
+                                            onClick={() => setActiveTab(tab.name)}
+                                            className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition border-b-2 ${activeTab === tab.name ? 'border-primary text-primary bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                                        >
+                                            {tab.name} <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === tab.name ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>{tab.count}</span>
+                                        </button>
+                                    ))}
                                 </div>
-                                <table className="w-full text-left">
-                                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                                        <tr>
-                                            <th className="px-6 py-4">Order ID</th>
-                                            <th className="px-6 py-4">Product</th>
-                                            <th className="px-6 py-4">Quantity</th>
-                                            <th className="px-6 py-4">Total Sale</th>
-                                            <th className="px-6 py-4">Your Earning</th>
-                                            <th className="px-6 py-4 text-right">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 text-sm">
-                                        {orders.length > 0 ? orders.map(order => (
-                                            <tr key={order._id} className="hover:bg-slate-50 transition">
-                                                <td className="px-6 py-4 font-mono text-[10px] text-slate-400">#{order._id.slice(-6)}</td>
-                                                <td className="px-6 py-4 font-bold text-slate-700">{order.productId?.title || 'Unknown Product'}</td>
-                                                <td className="px-6 py-4 text-center text-slate-700">{order.quantity}</td>
-                                                <td className="px-6 py-4 font-black text-slate-800">₹{order.totalAmount}</td>
-                                                <td className="px-6 py-4 font-black text-green-600">₹{order.sellerEarning}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${order.orderStatus === 'delivered' ? 'text-green-600 bg-green-50' :
-                                                        order.orderStatus === 'shipped' ? 'text-blue-600 bg-blue-50' :
-                                                            'text-orange-600 bg-orange-50'
-                                                        }`}>{order.orderStatus}</span>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr>
-                                                <td colSpan="6" className="px-6 py-12 text-center text-slate-400 font-bold italic">No orders received yet.</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+
+                                {/* Table Header */}
+                                <div className="grid grid-cols-10 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400">
+                                    <div className="col-span-2">Order Details</div>
+
+                                    <div className="col-span-3">Product Details</div>
+                                    <div className="col-span-1">Payment</div>
+                                    <div className="col-span-2">Status</div>
+                                    <div className="col-span-2 text-right">Action</div>
+                                </div>
+
+                                {/* Scrollable Table Body */}
+                                <div className="flex-1 overflow-y-auto">
+                                    {getFilteredOrders().length > 0 ? getFilteredOrders().map(order => (
+                                        <div key={order._id} className="grid grid-cols-10 gap-4 px-6 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center text-xs">
+                                            {/* Order Details */}
+                                            <div className="col-span-2">
+                                                <div className="font-bold text-primary cursor-pointer hover:underline">#{order._id.slice(-6)}</div>
+                                                <div className="text-[10px] text-slate-400 font-bold mt-1">
+                                                    {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                </div>
+                                                <div className="text-[10px] text-slate-400 font-semibold">
+                                                    {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </div>
+                                            </div>
+
+
+
+                                            {/* Product Details */}
+                                            <div className="col-span-3 flex items-start gap-3">
+                                                <div className="w-12 h-12 flex-shrink-0 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden">
+                                                    <img
+                                                        src={order.productId?.imageUrls?.[0] || 'https://via.placeholder.com/48'}
+                                                        alt={order.productId?.title}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-slate-700 truncate" title={order.productId?.title}>{order.productId?.title || 'Unknown Product'}</div>
+                                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                        <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">Qty: {order.quantity}</span>
+                                                        {order.productId?.sku && <span className="text-[10px] text-slate-400 font-mono">SKU: {order.productId.sku}</span>}
+                                                    </div>
+                                                    <div className="mt-1">
+                                                        {order.selectedVariation && Object.keys(order.selectedVariation).length > 0 ? (
+                                                            <span className="text-[10px] font-bold bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded text-slate-600 inline-block">
+                                                                {Object.entries(order.selectedVariation).map(([key, val]) => `${key}: ${val}`).join(' | ')}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-bold text-slate-300">Variation: N/A</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Payment */}
+                                            <div className="col-span-1">
+                                                <div className="font-black text-slate-800">₹{order.sellerEarning}</div>
+                                                <div className="text-[9px] font-bold uppercase text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block mt-1">Prepaid</div>
+                                            </div>
+
+                                            {/* Status */}
+                                            <div className="col-span-2">
+                                                <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-md inline-flex items-center gap-1 border ${order.logisticsStatus === 'pending' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                                    order.logisticsStatus === 'ready-to-ship' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                                        order.logisticsStatus === 'awb-assigned' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                            order.logisticsStatus === 'pickup-scheduled' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
+                                                                order.logisticsStatus === 'in-transit' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                                                    order.logisticsStatus === 'delivered' ? 'bg-green-50 text-green-600 border-green-100' :
+                                                                        ['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) ? 'bg-red-50 text-red-600 border-red-100' :
+                                                                            'bg-slate-50 text-slate-600 border-slate-100'
+                                                    }`}>
+                                                    {order.logisticsStatus === 'pending' && <Clock size={10} />}
+                                                    {order.logisticsStatus === 'ready-to-ship' && <Package size={10} />}
+                                                    {order.logisticsStatus === 'awb-assigned' && <FileText size={10} />}
+                                                    {order.logisticsStatus === 'pickup-scheduled' && <Truck size={10} />}
+                                                    {order.logisticsStatus === 'in-transit' && <Truck size={10} />}
+                                                    {order.logisticsStatus === 'delivered' && <CheckCircle size={10} />}
+                                                    {['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) && <XCircle size={10} />}
+                                                    <span>{order.logisticsStatus.replace(/-/g, ' ')}</span>
+                                                </div>
+                                                {['awb-assigned', 'pickup-scheduled'].includes(order.logisticsStatus) &&
+                                                    <div className="text-[9px] text-slate-400 mt-1 font-semibold pl-1">Waiting for Courier</div>
+                                                }
+                                            </div>
+
+                                            {/* Action */}
+                                            <div className="col-span-2 text-right">
+                                                {['pending', 'ready-to-ship', 'awb-assigned', 'pickup-scheduled', 'manifest-generated'].includes(order.logisticsStatus) ? (
+                                                    <button
+                                                        onClick={() => setManagedOrder(order._id)}
+                                                        className="bg-primary text-white pl-3 pr-4 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center justify-center gap-1 ml-auto"
+                                                    >
+                                                        {['awb-assigned', 'pickup-scheduled', 'manifest-generated'].includes(order.logisticsStatus) ? (
+                                                            <>
+                                                                <Download size={12} /> Download
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Truck size={12} /> Ship Now
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                ) : (
+                                                    <button className="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase cursor-not-allowed ml-auto">
+                                                        Track
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )) : (
+                                        <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                                            <Package size={48} className="opacity-20 mb-4" />
+                                            <div className="font-bold text-sm">No orders found in '{activeTab}'</div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         } />
                         <Route path="/earnings" element={
@@ -465,22 +674,41 @@ const SellerDashboard = () => {
                             <button onClick={() => setShowAddForm(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={24} /></button>
                         </div>
                         <form onSubmit={handleAddProduct} className="space-y-3 font-bold">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Product Title *</label>
                                     <input type="text" placeholder="e.g. Wireless Industrial Sensors" required className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-slate-700 text-sm"
                                         value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Category *</label>
-                                    <select required className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-slate-700 font-bold text-sm"
-                                        value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                                        {categories.map((cat, idx) => (
-                                            <option key={idx} value={cat}>{cat}</option>
-                                        ))}
-                                        <option value="Add New Category" className="font-bold text-primary">+ Add New Category</option>
-                                    </select>
-                                    {formData.category === 'Add New Category' && (
+                                <div className="flex gap-2">
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Category *</label>
+                                        <select required className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-slate-700 font-bold text-sm"
+                                            value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value, subCategory: '' })}>
+                                            <option value="">Select Category</option>
+                                            {categories.map((cat, idx) => (
+                                                <option key={idx} value={cat.name}>{cat.name}</option>
+                                            ))}
+                                            <option value="Add New Category" className="font-bold text-primary">+ Add New Category</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Sub Category</label>
+                                        <select
+                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-slate-700 font-bold text-sm disabled:opacity-50"
+                                            value={formData.subCategory}
+                                            onChange={e => setFormData({ ...formData, subCategory: e.target.value })}
+                                            disabled={!formData.category || formData.category === 'Add New Category'}
+                                        >
+                                            <option value="">Select Sub Category</option>
+                                            {formData.category && categories.find(c => c.name === formData.category)?.subCategories?.map((sub, idx) => (
+                                                <option key={idx} value={sub.name}>{sub.name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                {formData.category === 'Add New Category' && (
+                                    <div className="md:col-span-2">
                                         <input
                                             type="text"
                                             placeholder="Enter category name (e.g. Toys)"
@@ -489,8 +717,8 @@ const SellerDashboard = () => {
                                             value={formData.customCategory}
                                             onChange={e => setFormData({ ...formData, customCategory: e.target.value })}
                                         />
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Description *</label>
@@ -498,7 +726,7 @@ const SellerDashboard = () => {
                                     value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
                             </div>
                             {/* HSN Code, GST %, Price, Stock in one row */}
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div>
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">HSN Code *</label>
                                     <input type="text" placeholder="853210" required minLength={6} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-slate-700 font-bold text-sm"
@@ -508,7 +736,7 @@ const SellerDashboard = () => {
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">GST % *</label>
                                     <select required className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary text-slate-700 font-bold text-sm"
                                         value={formData.gstPercentage} onChange={e => setFormData({ ...formData, gstPercentage: e.target.value })}>
-                                        <option value="">GST</option>
+                                        <option value="">Select GST %</option>
                                         {gstSlabs.map((rate) => (
                                             <option key={rate} value={rate}>{rate}%</option>
                                         ))}
@@ -554,7 +782,7 @@ const SellerDashboard = () => {
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
                                 <div className="flex justify-between items-center">
                                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiered Pricing (Volume Discounts)</h3>
-                                    <button type="button" onClick={() => setTieredPricing([...tieredPricing, { moq: '', price: '', length: '', breadth: '', height: '', weight: '' }])} className="bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-full p-1 transition"><PlusCircle size={16} /></button>
+                                    <button type="button" onClick={() => setTieredPricing([...tieredPricing, { moq: '', price: '', length: '', breadth: '', height: '', weight: '' }])} className="bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg px-2 py-1 flex items-center gap-1 transition text-[10px] font-bold uppercase"><PlusCircle size={14} /> Add Tier</button>
                                 </div>
                                 {tieredPricing.length > 0 && (
                                     <div className="overflow-x-auto">
@@ -618,10 +846,240 @@ const SellerDashboard = () => {
                                 </div>
                             </div>
                             <div className="flex space-x-3 pt-4">
-                                <button type="submit" className="flex-1 bg-primary text-white py-3 rounded-xl font-black uppercase text-xs shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition">{isEdit ? 'Update Details' : 'Submit Listing'}</button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className={`flex-1 bg-primary text-white py-3 rounded-xl font-black uppercase text-xs shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    {isSubmitting ? 'Processing...' : (isEdit ? 'Update Details' : 'Submit Listing')}
+                                </button>
                                 <button type="button" onClick={() => setShowAddForm(false)} className="flex-1 bg-slate-100 text-slate-500 py-3 rounded-xl font-black uppercase text-xs hover:bg-slate-200 transition">Cancel</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Shipment Manager Modal */}
+            {managedOrder && (
+                <ShipmentManager
+                    orderId={managedOrder}
+                    onClose={() => setManagedOrder(null)}
+                    onUpdate={() => { fetchOrders(); }}
+                />
+            )}
+            {/* Profile Modal */}
+            {showProfileModal && profile && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full relative overflow-hidden max-h-[90vh] flex flex-col">
+                        {/* Header */}
+                        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-8 pt-6 pb-16 relative flex-shrink-0">
+                            <button
+                                onClick={() => { setShowProfileModal(false); setEditMode(false); setProfileTab('profile'); }}
+                                className="absolute top-4 right-4 text-white/70 hover:text-white transition"
+                            >
+                                <XCircle size={24} />
+                            </button>
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center border border-white/20">
+                                    <User size={32} className="text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-black text-white">{profile.name}</h2>
+                                    <p className="text-white/60 text-xs font-semibold">{profile.email}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex border-b border-slate-100 flex-shrink-0 -mt-8 mx-6 bg-white rounded-xl shadow-md z-10 relative overflow-hidden">
+                            {['profile', 'pickup'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setProfileTab(tab)}
+                                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition border-b-2 ${profileTab === tab ? 'border-primary text-primary bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {tab === 'profile' ? '👤 Profile' : '📍 Pickup Address'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Body */}
+                        <div className="overflow-y-auto flex-1 px-6 py-4">
+                            {profileTab === 'profile' && (
+                                <div className="space-y-4">
+                                    {!editMode ? (
+                                        <>
+                                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                                <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Business Details</h3>
+                                                <div className="space-y-2 text-sm font-bold text-slate-700">
+                                                    {[
+                                                        { label: 'GST Number', val: profile.gstNumber || 'N/A' },
+                                                        { label: 'Phone', val: `${profile.countryCode || ''} ${profile.phone || 'N/A'}` },
+                                                        { label: 'SR Pickup Nickname', val: profile.shiprocketNickname || 'Not set' }
+                                                    ].map(({ label, val }) => (
+                                                        <div key={label} className="flex justify-between">
+                                                            <span className="text-slate-500">{label}</span>
+                                                            <span className={label === 'SR Pickup Nickname' ? 'text-primary' : ''}>{val}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                                <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Bank Details</h3>
+                                                <div className="space-y-2 text-sm font-bold text-slate-700">
+                                                    {[
+                                                        { label: 'Account Name', val: profile.bankDetails?.accountName || 'N/A' },
+                                                        { label: 'Account No.', val: profile.bankDetails?.accountNumber || 'N/A', mono: true },
+                                                        { label: 'IFSC Code', val: profile.bankDetails?.ifscCode || 'N/A', mono: true }
+                                                    ].map(({ label, val, mono }) => (
+                                                        <div key={label} className="flex justify-between">
+                                                            <span className="text-slate-500">{label}</span>
+                                                            <span className={mono ? 'font-mono' : ''}>{val}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <button onClick={() => { setProfileFormData({ name: profile.name, phone: profile.phone, pickupAddress: profile.pickupAddress, shiprocketNickname: profile.shiprocketNickname || 'Primary', gstNumber: profile.gstNumber || '' }); setEditMode(true); }}
+                                                className="w-full bg-slate-100 text-slate-700 py-3 rounded-xl font-bold uppercase text-xs hover:bg-slate-200 transition">
+                                                Edit Profile
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {[
+                                                { label: 'Full Name', key: 'name', type: 'text' },
+                                                { label: 'Phone', key: 'phone', type: 'text' },
+                                                { label: 'GST Number', key: 'gstNumber', type: 'text' },
+                                            ].map(({ label, key, type }) => (
+                                                <div key={key}>
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">{label}</label>
+                                                    <input type={type} value={profileFormData[key] || ''} onChange={e => setProfileFormData({ ...profileFormData, [key]: e.target.value })}
+                                                        className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                                </div>
+                                            ))}
+                                            <div className="flex gap-2 pt-2">
+                                                <button onClick={() => setEditMode(false)} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-black uppercase text-xs">Cancel</button>
+                                                <button onClick={handleUpdateProfile} disabled={loading} className="flex-1 bg-primary text-white py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center">
+                                                    {loading ? <Loader2 className="animate-spin" size={16} /> : 'Save Changes'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {profileTab === 'pickup' && (
+                                <div className="space-y-4">
+                                    {/* Status badge */}
+                                    {profile.pickupAddressDetails?.locationName ? (
+                                        <div className={`flex items-center gap-3 p-3 rounded-xl border text-sm font-bold ${profile.pickupAddressDetails.isRegisteredWithShiprocket ? 'bg-green-50 border-green-200 text-green-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                                            <span>{profile.pickupAddressDetails.isRegisteredWithShiprocket ? '✅' : '⚠️'}</span>
+                                            <div>
+                                                <div className="font-black">{profile.pickupAddressDetails.locationName}</div>
+                                                <div className="text-xs font-medium">{profile.pickupAddressDetails.isRegisteredWithShiprocket ? 'Registered with ShipRocket — ready to use' : 'Saved but NOT yet registered with ShipRocket'}</div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700 font-bold">
+                                            📍 No pickup address set yet. Add one below to enable automatic ShipRocket pickup.
+                                        </div>
+                                    )}
+
+                                    <div className="bg-slate-50 rounded-xl border border-slate-100 p-4 space-y-3">
+                                        <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Pickup Address Details</h3>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Location Nickname <span className="text-red-500">*</span></label>
+                                            <input type="text" placeholder="e.g. Delhi Warehouse, Store Mumbai"
+                                                value={pickupForm.locationName || ''}
+                                                onChange={e => setPickupForm({ ...pickupForm, locationName: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                            <p className="text-[9px] text-slate-400 mt-1">This becomes your ShipRocket pickup location nickname. Must be unique.</p>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Contact Person Name <span className="text-red-500">*</span></label>
+                                            <input type="text" placeholder="e.g. Ramesh Kumar"
+                                                value={pickupForm.name || ''}
+                                                onChange={e => setPickupForm({ ...pickupForm, name: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Phone <span className="text-red-500">*</span></label>
+                                            <input type="tel" placeholder="10-digit mobile number"
+                                                value={pickupForm.phone || ''}
+                                                onChange={e => setPickupForm({ ...pickupForm, phone: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Address Line 1 <span className="text-red-500">*</span></label>
+                                            <input type="text" placeholder="House/Shop No., Street"
+                                                value={pickupForm.address || ''}
+                                                onChange={e => setPickupForm({ ...pickupForm, address: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Address Line 2</label>
+                                            <input type="text" placeholder="Landmark, Area (optional)"
+                                                value={pickupForm.address2 || ''}
+                                                onChange={e => setPickupForm({ ...pickupForm, address2: e.target.value })}
+                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">City <span className="text-red-500">*</span></label>
+                                                <input type="text" placeholder="New Delhi"
+                                                    value={pickupForm.city || ''}
+                                                    onChange={e => setPickupForm({ ...pickupForm, city: e.target.value })}
+                                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">State <span className="text-red-500">*</span></label>
+                                                <input type="text" placeholder="Delhi"
+                                                    value={pickupForm.state || ''}
+                                                    onChange={e => setPickupForm({ ...pickupForm, state: e.target.value })}
+                                                    className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Pincode <span className="text-red-500">*</span></label>
+                                            <input type="text" placeholder="110001" maxLength={6}
+                                                value={pickupForm.pincode || ''}
+                                                onChange={e => setPickupForm({ ...pickupForm, pincode: e.target.value.replace(/\D/g, '') })}
+                                                className="w-full p-2.5 bg-white border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-primary" />
+                                        </div>
+                                    </div>
+
+                                    {pickupError && (
+                                        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 font-bold">{pickupError}</div>
+                                    )}
+
+                                    <button
+                                        onClick={handleRegisterPickup}
+                                        disabled={pickupLoading}
+                                        className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3.5 rounded-xl font-black uppercase text-xs shadow-lg shadow-green-200 flex items-center justify-center gap-2 hover:from-green-700 hover:to-emerald-700 transition disabled:opacity-60"
+                                    >
+                                        {pickupLoading ? <Loader2 className="animate-spin" size={16} /> : '🚀 Save & Register with ShipRocket'}
+                                    </button>
+                                    <p className="text-[9px] text-slate-400 text-center leading-relaxed">
+                                        This registers your pickup location in ShipRocket. Future orders will use this address automatically for courier pickup.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer close */}
+                        <div className="px-6 pb-5 flex-shrink-0">
+                            <button onClick={() => { setShowProfileModal(false); setEditMode(false); setProfileTab('profile'); }} className="w-full text-slate-400 py-2 font-bold text-xs hover:text-slate-600 transition">
+                                Close
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
