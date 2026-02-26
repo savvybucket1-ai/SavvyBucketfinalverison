@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCurrentUser, logout } from '../utils/auth';
 import { ShoppingBag, User, Heart, MapPin, Search, ChevronDown, LogOut } from 'lucide-react';
+import { categories } from '../utils/categories';
 
 const Navbar = () => {
     const user = getCurrentUser();
@@ -9,14 +10,6 @@ const Navbar = () => {
     const [cartCount, setCartCount] = useState(0);
     const [wishlistCount, setWishlistCount] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
-
-    // Sidebar Categories (Same as Seller Dashboard & Category Page)
-    const categories = [
-        'Gifting Products', 'Electronic Gadgets', 'Bottles and Tumblers',
-        'Kitchen Ware', 'Lamp & Projector', 'Ceramic Mugs',
-        'Tripod and Stands', 'Toys and Games', 'Clothing',
-        'Statutes and Sculptures', 'Sublimation Products', 'Product Manufacturing'
-    ];
 
     // Calculate cart & wishlist count
     const updateCounts = () => {
@@ -53,24 +46,17 @@ const Navbar = () => {
         }
     };
 
-    const navItems = [
-        { name: 'Gifting Products', link: '/category/Gifting Products' },
-        { name: 'Electronic Gadgets', link: '/category/Electronic Gadgets' },
-        { name: 'Bottles and Tumblers', link: '/category/Bottles and Tumblers' },
-        { name: 'Kitchen Ware', link: '/category/Kitchen Ware' },
-        { name: 'Lamp & Projector', link: '/category/Lamp & Projector' },
-        { name: 'Ceramic Mugs', link: '/category/Ceramic Mugs' },
-        { name: 'Tripod and Stands', link: '/category/Tripod and Stands' },
-        { name: 'Toys and Games', link: '/category/Toys and Games' },
-        { name: 'Clothing', link: '/category/Clothing' },
-    ];
+    const navItems = categories.map(cat => ({
+        name: cat.name,
+        link: `/category/${cat.name}`
+    }));
 
     return (
         <header className="bg-white sticky top-0 z-50 shadow-sm border-b border-slate-100">
             {/* Main Header Container */}
             <div className="max-w-[1440px] mx-auto px-4 md:px-6 py-4 flex flex-wrap lg:flex-nowrap items-center justify-between gap-4 lg:gap-12">
                 {/* Logo */}
-                <Link to="/" className="flex-shrink-0 order-1">
+                <Link to="/" className="flex items-center gap-2 flex-shrink-0 order-1">
                     <img
                         src="https://deodap.com/cdn/shop/files/DeoDap_Logo_New_300x.png?v=1614332567"
                         alt="DeoDap Logo"
@@ -94,8 +80,8 @@ const Navbar = () => {
                         {/* Dropdown Menu */}
                         <div className="absolute top-full left-0 w-56 bg-white shadow-xl rounded-xl border border-slate-100 py-2 hidden group-hover/cat:block max-h-[400px] overflow-y-auto z-50">
                             {categories.map((cat, idx) => (
-                                <Link to={`/category/${cat}`} key={idx} className="block px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors">
-                                    {cat}
+                                <Link to={`/category/${cat.name}`} key={idx} className="block px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-primary transition-colors">
+                                    {cat.name}
                                 </Link>
                             ))}
                         </div>

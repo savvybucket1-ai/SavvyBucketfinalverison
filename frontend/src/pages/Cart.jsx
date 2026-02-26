@@ -85,16 +85,21 @@ const Cart = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-4">
                     {cart.map((item, idx) => (
-                        <div key={item.cartItemId || item._id + idx} className="bg-white p-4 rounded-xl border flex items-center gap-4">
-                            <div className="w-24 h-24 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden">
+                        <div key={item.cartItemId || item._id + idx} className="bg-white p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                            <div className="w-full sm:w-24 h-40 sm:h-24 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden relative">
                                 <img
                                     src={item.imageUrls?.[0] || 'https://via.placeholder.com/100'}
                                     alt={item.title}
-                                    className="w-full h-full object-contain p-2"
+                                    className="w-full h-full object-contain p-2 absolute inset-0"
                                 />
                             </div>
-                            <div className="flex-1">
-                                <h3 className="font-bold text-slate-800">{item.title}</h3>
+                            <div className="flex-1 w-full">
+                                <div className="flex justify-between items-start gap-2">
+                                    <h3 className="font-bold text-slate-800 line-clamp-2">{item.title}</h3>
+                                    <button onClick={() => removeFromCart(item.cartItemId || item._id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition sm:hidden flex-shrink-0 -mt-2 -mr-2">
+                                        <Trash2 size={20} />
+                                    </button>
+                                </div>
                                 <p className="text-sm text-slate-500 line-clamp-1">{item.description}</p>
                                 {item.selectedVariation && Object.keys(item.selectedVariation).length > 0 && (
                                     <div className="mt-1 text-xs text-slate-500 font-bold">
@@ -126,13 +131,13 @@ const Cart = () => {
 
                                     </div>
 
-                                    <div className="flex flex-col text-xs text-slate-500">
+                                    <div className="flex flex-col text-xs text-slate-500 whitespace-nowrap">
                                         <span>Min Order: <span className="font-bold text-slate-700">{item.moq || 1}</span></span>
                                         <span>Total: <span className="font-bold text-slate-700">₹{getItemSubtotal(item).toLocaleString()}</span></span>
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={() => removeFromCart(item.cartItemId || item._id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition">
+                            <button onClick={() => removeFromCart(item.cartItemId || item._id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition hidden sm:block flex-shrink-0 ml-2">
                                 <Trash2 size={20} />
                             </button>
                         </div>

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ShoppingCart, ExternalLink, ChevronRight, Zap, Truck, ShieldCheck, CreditCard, Mail, Star, Minus, Plus, BadgePercent } from 'lucide-react';
+import { ShoppingCart, ExternalLink, ChevronRight, Zap, Truck, ShieldCheck, CreditCard, Mail, Star, Minus, Plus, BadgePercent, Heart } from 'lucide-react';
 import { getCurrentUser } from '../utils/auth';
+import { categories } from '../utils/categories';
+import API_BASE_URL from '../config';
 
 const BuyerHome = () => {
     const [products, setProducts] = useState([]);
+    const [trendingProducts, setTrendingProducts] = useState([]);
     const [influencerVideos, setInfluencerVideos] = useState([]);
     const user = getCurrentUser();
     const navigate = useNavigate();
@@ -13,7 +16,7 @@ const BuyerHome = () => {
     const [quantities, setQuantities] = useState({});
 
     useEffect(() => {
-        axios.get('http://localhost:5000/api/products/buyer/list')
+        axios.get(`${API_BASE_URL}/api/products/buyer/list`)
             .then(res => {
                 if (Array.isArray(res.data)) {
                     setProducts(res.data);
@@ -24,7 +27,11 @@ const BuyerHome = () => {
             })
             .catch(err => console.error("Error fetching products:", err));
 
-        axios.get('http://localhost:5000/api/influencer-videos/list')
+        axios.get(`${API_BASE_URL}/api/products/buyer/trending`)
+            .then(res => setTrendingProducts(res.data))
+            .catch(err => console.error("Error fetching trending products:", err));
+
+        axios.get(`${API_BASE_URL}/api/influencer-videos/list`)
             .then(res => setInfluencerVideos(res.data))
             .catch(err => console.error("Error fetching videos:", err));
     }, []);
@@ -70,33 +77,43 @@ const BuyerHome = () => {
         alert(`Bulk Quote Request Sent for ${product.title}!\nOur B2B team will contact you within 24 hours.`);
     };
 
-    const categoryIcons = [
-        { name: 'Gifting Products', img: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?q=80&w=200&auto=format&fit=crop' },
-        { name: 'Electronic Gadgets', img: '/electronic_gadgets.jpg' },
-        { name: 'Bottles and Tumblers', img: '/bottles_and_tumblers.png' },
-        { name: 'Kitchen Ware', img: 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?q=80&w=200&auto=format&fit=crop' },
-        { name: 'Lamp & Projector', img: '/lamp_projector.png' },
-        { name: 'Ceramic Mugs', img: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?q=80&w=200&auto=format&fit=crop' },
-        { name: 'Tripod and Stands', img: 'https://images.unsplash.com/photo-1527011046414-4781f1f94f8c?q=80&w=200&auto=format&fit=crop' },
-        { name: 'Toys and Games', img: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?q=80&w=200&auto=format&fit=crop' },
-        { name: 'Clothing', img: '/clothing.jpg' },
-        { name: 'Statutes and Sculptures', img: 'https://images.unsplash.com/photo-1544531586-fde5298cdd40?q=80&w=200&auto=format&fit=crop' },
-        { name: 'Sublimation Products', img: '/sublimation_products.png' },
-        { name: 'Product Manufacturing', img: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=200&auto=format&fit=crop' },
-    ];
 
-    const watchAndBuyItems = [
-        { id: 1, title: 'Multi Compartment Lunch Box', price: 235, originalPrice: 399, discount: 41, img: 'https://images.unsplash.com/photo-1588619461336-d48e8913b7a5?q=80&w=400&auto=format&fit=crop' },
-        { id: 2, title: 'Window Cleaning Brush', price: 23, originalPrice: 99, discount: 77, img: 'https://images.unsplash.com/photo-1563453392212-326f5e854473?q=80&w=400&auto=format&fit=crop' },
-        { id: 3, title: 'Solar Power Car Scent Diffuser', price: 98, originalPrice: 199, discount: 51, img: 'https://images.unsplash.com/photo-1605218457332-901b0f15c488?q=80&w=400&auto=format&fit=crop' },
-        { id: 4, title: 'Silicone Baby Teething Toys', price: 65, originalPrice: 249, discount: 74, img: 'https://images.unsplash.com/photo-1533038590840-1cde6e668a91?q=80&w=400&auto=format&fit=crop' },
-        { id: 5, title: 'Apple Design Soft Paper Soap', price: 29, originalPrice: 99, discount: 71, img: 'https://images.unsplash.com/photo-1610434460010-3843f55c5dfb?q=80&w=400&auto=format&fit=crop' },
-        { id: 6, title: 'Iki Portable Fan', price: 400, originalPrice: 999, discount: 60, img: 'https://images.unsplash.com/photo-1618941716939-553df3c6c278?q=80&w=400&auto=format&fit=crop' },
-    ];
+    const [wishlist, setWishlist] = useState([]);
+
+    useEffect(() => {
+        const storedWishlist = JSON.parse(localStorage.getItem('wishlist') || '[]');
+        setWishlist(storedWishlist.map(item => item._id));
+
+        const handleWishlistUpdate = () => {
+            const updated = JSON.parse(localStorage.getItem('wishlist') || '[]');
+            setWishlist(updated.map(item => item._id));
+        };
+
+        window.addEventListener('wishlistUpdated', handleWishlistUpdate);
+        return () => window.removeEventListener('wishlistUpdated', handleWishlistUpdate);
+    }, []);
+
+    const toggleWishlist = (e, product) => {
+        e.preventDefault(); // Prevent navigation
+        const storedWishlist = JSON.parse(localStorage.getItem('wishlist') || '[]');
+        const exists = storedWishlist.find(item => item._id === product._id);
+
+        let newWishlist;
+        if (exists) {
+            newWishlist = storedWishlist.filter(item => item._id !== product._id);
+            setWishlist(prev => prev.filter(id => id !== product._id));
+        } else {
+            newWishlist = [...storedWishlist, product];
+            setWishlist(prev => [...prev, product._id]);
+        }
+
+        localStorage.setItem('wishlist', JSON.stringify(newWishlist));
+        window.dispatchEvent(new Event('wishlistUpdated'));
+    };
 
     return (
         <div className="bg-slate-50 min-h-screen">
-            <div className="max-w-[1440px] mx-auto px-6 py-8">
+            <div className="max-w-[1440px] mx-auto px-4 md:px-6 py-8">
                 {/* Top Categories Header */}
                 <div className="flex justify-center mb-8">
                     <div className="relative bg-gradient-to-r from-red-800 to-red-900 text-white px-12 py-3 rounded-tr-[30px] rounded-bl-[30px] shadow-lg transform -skew-x-6 border-b-4 border-red-950">
@@ -105,11 +122,11 @@ const BuyerHome = () => {
                 </div>
 
                 {/* Category Grid */}
-                <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-6 lg:flex lg:overflow-x-auto lg:gap-6 lg:no-scrollbar lg:pb-4 mb-12">
-                    {categoryIcons.map((cat, idx) => (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:flex lg:overflow-x-auto lg:gap-6 lg:no-scrollbar lg:pb-4 mb-12 gap-3 sm:gap-4">
+                    {categories.map((cat, idx) => (
                         <Link to={`/category/${cat.name}`} key={idx} className="flex flex-col items-center gap-2 group cursor-pointer lg:min-w-[120px] lg:block">
                             <div className="w-full aspect-square rounded-2xl bg-white shadow-sm border border-slate-100 p-2 group-hover:shadow-md group-hover:border-primary/30 transition-all">
-                                <img src={cat.img} alt={cat.name} className="w-full h-full object-cover rounded-xl" />
+                                <img src={cat.image} alt={cat.name} className="w-full h-full object-cover rounded-xl" />
                             </div>
                             <span className="text-[10px] md:text-xs font-bold text-slate-700 text-center leading-tight group-hover:text-primary transition-colors line-clamp-2 mt-2">{cat.name}</span>
                         </Link>
@@ -160,7 +177,73 @@ const BuyerHome = () => {
                     </div>
                 </div>
 
-
+                {/* Trending Products Section */}
+                <div className="mb-12">
+                    <div className="flex justify-between items-center mb-8">
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3">
+                                <span className="w-2 h-8 bg-yellow-500 rounded-full"></span>
+                                TRENDING PRODUCTS
+                            </h2>
+                            <p className="text-slate-500 text-sm font-semibold mt-1">Hottest picks of the season</p>
+                        </div>
+                    </div>
+                    {trendingProducts.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {trendingProducts.map(product => (
+                                <Link key={product._id} to={`/product/${product._id}`} className="block relative group">
+                                    <div className="bg-white rounded-2xl p-3 shadow-md border hover:shadow-lg transition-all border-slate-100 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[9px] font-black px-2 py-1 rounded-bl-xl z-10">TRENDING</div>
+                                        <div className="aspect-square bg-slate-50 rounded-xl mb-3 p-2 overflow-hidden">
+                                            <img
+                                                src={product.imageUrls?.[0] || 'https://via.placeholder.com/150'}
+                                                alt={product.title}
+                                                className="w-full h-full object-contain group-hover:scale-105 transition-transform"
+                                            />
+                                        </div>
+                                        <h3 className="text-xs font-bold text-slate-800 line-clamp-2 mb-1 h-8">{product.title}</h3>
+                                        <div className="flex flex-col">
+                                            {(() => {
+                                                const qty = product.moq || 1;
+                                                const currentUnitPrice = getPriceForQuantity(product, qty);
+                                                const priceWithGST = Math.round(currentUnitPrice * (1 + (product.gstPercentage || 0) / 100));
+                                                return (
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-baseline gap-1">
+                                                                <span className="font-black text-slate-900">₹{priceWithGST.toLocaleString()}</span>
+                                                                <span className="text-[8px] font-bold text-slate-500">(Incl. Tax)</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={(e) => toggleWishlist(e, product)}
+                                                                    className={`p-2 rounded-lg transition-colors ${wishlist.includes(product._id) ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                                                                >
+                                                                    <Heart size={14} className={wishlist.includes(product._id) ? "fill-red-500" : ""} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.preventDefault(); handleAddToCart(product); }}
+                                                                    className="bg-slate-900 text-white p-2 rounded-lg hover:bg-primary transition"
+                                                                >
+                                                                    <ShoppingCart size={14} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[9px] text-slate-400 font-medium mt-1">₹{currentUnitPrice} + {product.gstPercentage}% GST</span>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="w-full text-center py-8 text-slate-400 font-bold italic bg-slate-100 rounded-2xl">
+                            No trending products curated yet.
+                        </div>
+                    )}
+                </div>
 
                 {/* Deal of the Day Section */}
                 <div className="mb-12">
@@ -183,7 +266,7 @@ const BuyerHome = () => {
                                 <div className="bg-white rounded-3xl p-4 shadow-sm hover:shadow-xl transition-all duration-300 group cursor-pointer border border-white hover:border-primary/20">
                                     <div className="relative aspect-square rounded-2xl bg-slate-50 overflow-hidden mb-4 p-4">
                                         <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-red-100/80 backdrop-blur-sm text-red-600 text-[9px] font-black px-2 py-1 rounded-lg">
-                                            <Zap size={10} className="fill-red-600" /> DISH OF THE DAY
+                                            <Zap size={10} className="fill-red-600" /> DEAL OF THE DAY
                                         </div>
                                         <img
                                             src={product.imageUrls?.[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=2070&auto=format&fit=crop'}
@@ -195,9 +278,9 @@ const BuyerHome = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex justify-between items-start mb-1">
-                                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-tight line-clamp-1">{product.title}</h3>
-                                        <span className="text-[9px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded uppercase">{product.category}</span>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start mb-1 gap-1">
+                                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-tight line-clamp-2 sm:line-clamp-1">{product.title}</h3>
+                                        <span className="text-[9px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded uppercase self-start sm:self-auto">{product.category}</span>
                                     </div>
                                     {product.tieredPricing?.length > 0 && (
                                         <div className="flex items-center gap-1 text-[9px] font-black text-green-600 mb-2">
@@ -211,10 +294,20 @@ const BuyerHome = () => {
                                         const priceWithGST = Math.round(currentUnitPrice * (1 + (product.gstPercentage || 0) / 100));
                                         return (
                                             <div className="flex flex-col mb-3">
-                                                <span className="text-[10px] text-slate-400 font-medium">₹{priceWithGST.toLocaleString()} (Incl. of all taxes)</span>
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="text-lg font-black text-slate-800">₹{currentUnitPrice}</span>
-                                                    <span className="text-[10px] font-bold text-slate-500">+ {product.gstPercentage}% GST</span>
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex flex-col mb-1">
+                                                        <div className="flex items-baseline flex-wrap gap-1">
+                                                            <span className="text-lg font-black text-slate-800">₹{priceWithGST.toLocaleString()}</span>
+                                                            <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">(Incl. of all taxes)</span>
+                                                        </div>
+                                                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">₹{currentUnitPrice} + {product.gstPercentage}% GST</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => toggleWishlist(e, product)}
+                                                        className={`p-2 rounded-full transition-colors ${wishlist.includes(product._id) ? 'bg-red-50 text-red-500' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                                    >
+                                                        <Heart size={16} className={wishlist.includes(product._id) ? "fill-red-500" : ""} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         );
@@ -222,8 +315,8 @@ const BuyerHome = () => {
 
 
                                     <div className="flex flex-col gap-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center bg-white border border-slate-200 rounded-full p-0.5">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                            <div className="flex items-center bg-white border border-slate-200 rounded-full p-0.5 w-full sm:w-auto">
                                                 <button
                                                     onClick={(e) => {
                                                         e.preventDefault();
@@ -248,7 +341,7 @@ const BuyerHome = () => {
                                                     <Plus size={12} />
                                                 </button>
                                             </div>
-                                            <span className="text-[10px] font-medium text-slate-500">
+                                            <span className="text-[10px] font-medium text-slate-500 whitespace-nowrap">
                                                 Min Order: {product.moq}
                                             </span>
                                         </div>
