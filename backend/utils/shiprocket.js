@@ -114,7 +114,7 @@ async function generateLabel(shipmentId) {
 async function generateManifest(shipmentId) {
     const token = await getAuthToken();
     try {
-        const response = await axios.post(`${SHIPROCKET_API_BASE}/manifests/generate`, {
+        const response = await axios.post(`${SHIPROCKET_API_BASE}/manifests/print`, {
             shipment_id: [shipmentId]
         }, {
             headers: { Authorization: `Bearer ${token}` }
