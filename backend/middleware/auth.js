@@ -32,11 +32,13 @@ const auth = (roles = []) => {
             }
             next();
         } catch (err) {
-            console.error('Auth Middleware: Token verification failed:', err.message);
+            console.error('Auth Middleware: Token verification failed:', err.name, err.message, err.stack);
             if (err.name === 'TokenExpiredError') {
                 res.status(401).json({ message: 'Session expired. Please log in again.', code: 'TOKEN_EXPIRED' });
+            } else if (err.name === 'JsonWebTokenError') {
+                res.status(401).json({ message: 'Token is invalid or malformed', details: err.message });
             } else {
-                res.status(401).json({ message: 'Token is not valid' });
+                res.status(500).json({ message: 'Internal Server Error during token verification', details: err.message });
             }
         }
     };
