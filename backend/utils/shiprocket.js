@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const SHIPROCKET_API_BASE = 'https://apiv2.shiprocket.in/v1/payload';
+const SHIPROCKET_API_BASE = 'https://apiv2.shiprocket.in/v1/external';
 
 // Simple in-memory cache for token
 let srToken = null;
@@ -20,7 +20,7 @@ async function getAuthToken() {
     }
 
     try {
-        const response = await axios.post(`${SHIPROCKET_API_BASE}/login`, {
+        const response = await axios.post(`${SHIPROCKET_API_BASE}/auth/login`, {
             email,
             password
         });
