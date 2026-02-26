@@ -336,6 +336,109 @@ router.post('/webhook', express.json(), async (req, res) => {
     }
 });
 
+// ──────────────────────────────────────────────────
+// Sync Cancelled Orders (fixes orders missed by webhook)
+// POST /api/shipments/sync-cancelled
+// ──────────────────────────────────────────────────
+router.post('/sync-cancelled', auth(['seller', 'admin']), async (req, res) => {
+    try {
+        const canceledShipments = await Shipment.find({
+            status: { $in: ['Canceled', 'CANCELED', 'cancelled', 'Cancelled'] }
+        });
+
+        let fixed = 0;
+        for (const s of canceledShipments) {
+            const updated = await Order.findOneAndUpdate(
+                { _id: s.orderId, logisticsStatus: { $ne: 'cancelled' } },
+                { logisticsStatus: 'cancelled', orderStatus: 'cancelled' },
+                { new: true }
+            );
+            if (updated) fixed++;
+        }
+
+        res.json({ message: `Synced ${fixed} cancelled orders`, total: canceledShipments.length });
+    } catch (err) {
+        console.error('[Sync Cancelled Error]', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ──────────────────────────────────────────────────
+// Sync Active Seller Orders with Shiprocket
+// POST /api/shipments/sync-seller-orders
+// ──────────────────────────────────────────────────
+router.post('/sync-seller-orders', auth(['seller', 'admin']), async (req, res) => {
+    try {
+        const activeShipments = await Shipment.find({
+            sellerId: req.user.id,
+            status: { $nin: ['DELIVERED', 'CANCELED', 'CANCELLED', 'cancelled', 'delivered'] }
+        });
+
+        let updatedCount = 0;
+
+        for (const shipment of activeShipments) {
+            if (!shipment.shiprocketOrderId) continue;
+
+            try {
+                const srRes = await shiprocket.getOrderDetails(shipment.shiprocketOrderId);
+                const srStatus = srRes.data?.status;
+
+                if (srStatus && srStatus !== shipment.status) {
+                    shipment.status = srStatus;
+                    await shipment.save();
+
+                    // Map to logisticsStatus
+                    let logisticsStatus = null;
+                    const srStatusLower = srStatus.toLowerCase();
+                    if (srStatusLower.includes('delivered')) logisticsStatus = 'delivered';
+                    else if (srStatusLower.includes('transit') || srStatusLower.includes('in transit')) logisticsStatus = 'in-transit';
+                    else if (srStatusLower.includes('picked up') || srStatusLower.includes('pickup')) logisticsStatus = 'pickup-scheduled';
+                    else if (srStatusLower.includes('rto') || srStatusLower.includes('returned')) logisticsStatus = 'rto';
+                    else if (srStatusLower.includes('shipment created') || srStatusLower.includes('manifested')) logisticsStatus = 'manifest-generated';
+                    else if (srStatusLower.includes('cancel') || srStatusLower.includes('canceled')) logisticsStatus = 'cancelled';
+
+                    if (logisticsStatus) {
+                        const orderUpdate = { logisticsStatus };
+                        if (logisticsStatus === 'delivered') orderUpdate.orderStatus = 'delivered';
+                        if (logisticsStatus === 'in-transit' || logisticsStatus === 'pickup-scheduled') orderUpdate.orderStatus = 'shipped';
+                        if (logisticsStatus === 'cancelled' || logisticsStatus === 'rto') orderUpdate.orderStatus = 'cancelled';
+                        await Order.findByIdAndUpdate(shipment.orderId, orderUpdate);
+                    }
+                    updatedCount++;
+                }
+            } catch (err) {
+                console.error(`Failed to sync shipment ${shipment.shiprocketOrderId}:`, err);
+            }
+        }
+
+        res.json({ message: 'Sync complete', updatedCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ──────────────────────────────────────────────────
+// Manually cancel a specific order's logistics status
+// PATCH /api/shipments/cancel-order/:orderId
+// ──────────────────────────────────────────────────
+router.patch('/cancel-order/:orderId', auth(['seller', 'admin']), async (req, res) => {
+    try {
+        const order = await Order.findByIdAndUpdate(
+            req.params.orderId,
+            { logisticsStatus: 'cancelled', orderStatus: 'cancelled' },
+            { new: true }
+        );
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        await Shipment.findOneAndUpdate(
+            { orderId: req.params.orderId },
+            { status: 'CANCELED' }
+        );
+
+        res.json({ message: 'Order marked as cancelled', order });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
-
-

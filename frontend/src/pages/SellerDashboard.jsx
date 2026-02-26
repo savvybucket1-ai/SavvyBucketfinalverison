@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader, getCurrentUser, logout } from '../utils/auth';
-import { LayoutDashboard, Package, ShoppingCart, IndianRupee, Search, ChevronRight, User, PlusCircle, Clock, CheckCircle, XCircle, Truck, FileText, Menu, Download, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, IndianRupee, Search, ChevronRight, User, PlusCircle, Clock, CheckCircle, XCircle, Truck, FileText, Menu, Download, Loader2, RefreshCw } from 'lucide-react';
 import { Routes, Route } from 'react-router-dom';
 import Sidebar from '../components/DashboardSidebar';
 import { categories } from '../utils/categories';
@@ -64,6 +64,20 @@ const SellerDashboard = () => {
             console.log("Orders fetched:", res.data); // Debug log
         } catch (err) {
             console.error('Error fetching orders:', err);
+        }
+    };
+
+    const [syncing, setSyncing] = useState(false);
+    const syncWithShiprocket = async () => {
+        try {
+            setSyncing(true);
+            await axios.post(`${API_BASE_URL}/api/shipments/sync-seller-orders`, {}, { headers: getAuthHeader() });
+            await fetchOrders();
+        } catch (err) {
+            console.error("Sync error:", err);
+            alert("Failed to sync with Shiprocket");
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -493,16 +507,28 @@ const SellerDashboard = () => {
                         <Route path="/orders" element={
                             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[calc(100vh-140px)]">
                                 {/* Tabs */}
-                                <div className="flex border-b border-slate-200 overflow-x-auto">
-                                    {tabs.map(tab => (
+                                <div className="flex justify-between items-center border-b border-slate-200">
+                                    <div className="flex overflow-x-auto flex-1">
+                                        {tabs.map(tab => (
+                                            <button
+                                                key={tab.name}
+                                                onClick={() => setActiveTab(tab.name)}
+                                                className={`px-4 sm:px-6 py-4 text-[10px] sm:text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition border-b-2 ${activeTab === tab.name ? 'border-primary text-primary bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                                            >
+                                                {tab.name} <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === tab.name ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>{tab.count}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="pr-4 pl-2">
                                         <button
-                                            key={tab.name}
-                                            onClick={() => setActiveTab(tab.name)}
-                                            className={`px-6 py-4 text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition border-b-2 ${activeTab === tab.name ? 'border-primary text-primary bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                                            onClick={syncWithShiprocket}
+                                            disabled={syncing}
+                                            className="whitespace-nowrap bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 flex items-center px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition disabled:opacity-50"
                                         >
-                                            {tab.name} <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === tab.name ? 'bg-primary text-white' : 'bg-slate-200 text-slate-500'}`}>{tab.count}</span>
+                                            {syncing ? <Loader2 size={12} className="animate-spin mr-1.5" /> : <RefreshCw size={12} className="mr-1.5" />}
+                                            Sync Status
                                         </button>
-                                    ))}
+                                    </div>
                                 </div>
 
                                 {/* Table Header */}

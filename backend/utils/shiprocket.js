@@ -139,6 +139,19 @@ async function trackShipment(awb) {
     }
 }
 
+async function getOrderDetails(orderId) {
+    const token = await getAuthToken();
+    try {
+        const response = await axios.get(`${SHIPROCKET_API_BASE}/orders/show/${orderId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    } catch (err) {
+        console.error('[ShipRocket Get Order Details Error]', err.response?.data || err.message);
+        throw err.response?.data || err.message;
+    }
+}
+
 module.exports = {
     createOrder,
     checkServiceability,
@@ -146,5 +159,6 @@ module.exports = {
     requestPickup,
     generateLabel,
     generateManifest,
-    trackShipment
+    trackShipment,
+    getOrderDetails
 };
