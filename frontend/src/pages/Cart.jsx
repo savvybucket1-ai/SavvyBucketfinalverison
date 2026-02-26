@@ -168,7 +168,7 @@ const Cart = () => {
             {/* Address Modal */}
             {showAddressForm && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-slate-200">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full border border-slate-200 max-h-[90vh] overflow-y-auto scrollbar-hide">
                         <h2 className="text-xl font-bold mb-4 text-slate-800">Shipping Details</h2>
                         <form onSubmit={async (e) => {
                             e.preventDefault();
@@ -196,57 +196,57 @@ const Cart = () => {
                             }
                         }} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Full Name</label>
-                                <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Full Name</label>
+                                <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                     value={shippingAddress.fullName} onChange={e => setShippingAddress({ ...shippingAddress, fullName: e.target.value })} />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 1</label>
-                                <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Address Line 1</label>
+                                <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                     value={shippingAddress.addressLine1} onChange={e => setShippingAddress({ ...shippingAddress, addressLine1: e.target.value })} />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Address Line 2</label>
-                                <input type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Address Line 2 (Optional)</label>
+                                <input type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                     value={shippingAddress.addressLine2} onChange={e => setShippingAddress({ ...shippingAddress, addressLine2: e.target.value })} />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Landmark</label>
-                                <input type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Landmark (Optional)</label>
+                                <input type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                     value={shippingAddress.landmark} onChange={e => setShippingAddress({ ...shippingAddress, landmark: e.target.value })} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">City</label>
-                                    <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">City</label>
+                                    <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                         value={shippingAddress.city} onChange={e => setShippingAddress({ ...shippingAddress, city: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">State</label>
-                                    <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">State</label>
+                                    <input type="text" required className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                         value={shippingAddress.state} onChange={e => setShippingAddress({ ...shippingAddress, state: e.target.value })} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">PIN Code</label>
-                                    <input type="text" required pattern="[0-9]{6}" title="6 digit PIN code" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">PIN Code</label>
+                                    <input type="text" required pattern="[0-9]{6}" title="6 digit PIN code" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                         value={shippingAddress.pinCode} onChange={e => setShippingAddress({ ...shippingAddress, pinCode: e.target.value })} />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Phone Number</label>
-                                    <input type="tel" required pattern="[0-9]{10}" title="10 digit mobile number" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Phone Number</label>
+                                    <input type="tel" required pattern="[0-9]{10}" title="10 digit mobile number" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                         value={shippingAddress.phone} onChange={e => setShippingAddress({ ...shippingAddress, phone: e.target.value })} />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Alternate Phone (Optional)</label>
-                                <input type="tel" pattern="[0-9]{10}" title="10 digit mobile number" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold"
+                                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Alternate Phone (Optional)</label>
+                                <input type="tel" pattern="[0-9]{10}" title="10 digit mobile number" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
                                     value={shippingAddress.alternatePhone} onChange={e => setShippingAddress({ ...shippingAddress, alternatePhone: e.target.value })} />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Address Type</label>
+                                <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Address Type</label>
                                 <div className="flex gap-4">
                                     {['Home', 'Work', 'Other'].map(type => (
                                         <label key={type} className={`flex-1 cursor-pointer py-2 rounded-lg border-2 text-center text-sm font-bold transition ${shippingAddress.addressType === type ? 'border-primary bg-primary/5 text-primary' : 'border-slate-100 bg-slate-50 text-slate-500 hover:bg-slate-100'}`}>
