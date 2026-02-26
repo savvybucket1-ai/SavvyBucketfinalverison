@@ -3,7 +3,12 @@ const User = require('../models/User');
 
 const auth = (roles = []) => {
     return async (req, res, next) => {
-        const token = req.header('Authorization')?.replace('Bearer ', '');
+        let token = req.header('Authorization');
+        if (token) {
+            token = token.replace(/^Bearer /i, '');
+        } else {
+            token = req.header('x-auth-token');
+        }
 
         if (!token) {
             console.log('Auth Middleware: No token provided');
@@ -28,7 +33,11 @@ const auth = (roles = []) => {
             next();
         } catch (err) {
             console.error('Auth Middleware: Token verification failed:', err.message);
-            res.status(401).json({ message: 'Token is not valid' });
+            if (err.name === 'TokenExpiredError') {
+                res.status(401).json({ message: 'Session expired. Please log in again.', code: 'TOKEN_EXPIRED' });
+            } else {
+                res.status(401).json({ message: 'Token is not valid' });
+            }
         }
     };
 };
