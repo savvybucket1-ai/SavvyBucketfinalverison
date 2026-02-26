@@ -33,12 +33,12 @@ import TermsAndConditions from './pages/TermsAndConditions';
 function AppContent() {
     const location = useLocation();
 
-    // Logic to hide common UI elements on specific pages
     const isDashboardRoute = location.pathname.startsWith('/seller') || location.pathname.startsWith('/admin');
     const isAuthRoute = location.pathname === '/login' || location.pathname === '/register' || location.pathname === '/forgot-password';
     const isReelsPage = location.pathname === '/reels';
+    const isProfilePage = location.pathname === '/profile';
 
-    const shouldHideHeaderFooter = isDashboardRoute || isReelsPage || isAuthRoute;
+    const shouldHideHeaderFooter = isDashboardRoute || isReelsPage || isAuthRoute || isProfilePage;
     const shouldHideMobileNav = isDashboardRoute || isAuthRoute;
 
     return (
