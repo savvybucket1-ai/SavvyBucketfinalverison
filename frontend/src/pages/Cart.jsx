@@ -69,7 +69,7 @@ const Cart = () => {
 
     const getItemSubtotal = (item) => {
         const unitPrice = getPriceForQuantity(item, item.quantity);
-        const priceWithGST = Math.round(unitPrice * (1 + (item.gstPercentage || 0) / 100));
+        const priceWithGST = unitPrice * (1 + (item.gstPercentage || 0) / 100);
         return priceWithGST * item.quantity;
     };
 

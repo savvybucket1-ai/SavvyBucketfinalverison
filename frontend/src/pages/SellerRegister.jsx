@@ -331,7 +331,7 @@ const SellerRegister = () => {
                             </div>
                             <h2 className="text-2xl font-black text-slate-800">Verify Email</h2>
                             <p className="text-slate-500 font-medium">We've sent a 6-digit OTP to <span className="text-slate-800 font-bold">{formData.email}</span></p>
-
+                             <p className=" text-red-500 font-medium">Please check your inbox and spam/junk folder.</p>
                             <div>
                                 <input name="otp" type="text" required value={otp} onChange={(e) => setOtp(e.target.value)}
                                     className="w-full max-w-xs mx-auto text-center text-3xl tracking-[0.5em] p-4 rounded-xl border-2 border-slate-200 focus:border-primary outline-none font-black text-slate-800" placeholder="000000" maxLength={6} />

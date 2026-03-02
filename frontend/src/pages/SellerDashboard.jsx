@@ -57,15 +57,25 @@ const SellerDashboard = () => {
         fetchOrders();
     }, []);
 
-    const fetchOrders = async () => {
-        try {
-            const res = await axios.get(`${API_BASE_URL}/api/orders/my-orders`, { headers: getAuthHeader() });
-            setOrders(res.data);
-            console.log("Orders fetched:", res.data); // Debug log
-        } catch (err) {
-            console.error('Error fetching orders:', err);
-        }
-    };
+const fetchOrders = async () => {
+    try {
+        const res = await axios.get(
+            `${API_BASE_URL}/api/orders/my-orders`,
+            { headers: getAuthHeader() }
+        );
+
+        // Show only payment pending orders
+        const pendingOrders = res.data.filter(
+            order => order.paymentStatus == 'completed'
+        );
+
+        setOrders(pendingOrders);
+
+        console.log("Pending Orders:", pendingOrders);
+    } catch (err) {
+        console.error('Error fetching orders:', err);
+    }
+};
 
     const [syncing, setSyncing] = useState(false);
     const syncWithShiprocket = async () => {
@@ -111,8 +121,8 @@ const SellerDashboard = () => {
         }
 
         // Validate Images
-        if (selectedFiles.length === 0 && previews.length === 0) {
-            alert('Please upload at least one product image.');
+        if ( previews.length <3) {
+            alert('Please upload at least three product image.');
             return;
         }
 
@@ -592,33 +602,42 @@ const SellerDashboard = () => {
                                                     {/* Payment */}
                                                     <div className="col-span-1">
                                                         <div className="font-black text-slate-800">₹{order.sellerEarning}</div>
-                                                        <div className="text-[9px] font-bold uppercase text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block mt-1">Prepaid</div>
+                                                        <div className="text-[9px] font-bold uppercase text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block mt-1"></div>
                                                     </div>
 
                                                     {/* Status */}
-                                                    <div className="col-span-2">
-                                                        <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-md inline-flex items-center gap-1 border ${order.logisticsStatus === 'pending' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                                            order.logisticsStatus === 'ready-to-ship' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                                                order.logisticsStatus === 'awb-assigned' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                                    order.logisticsStatus === 'pickup-scheduled' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
-                                                                        order.logisticsStatus === 'in-transit' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                                            order.logisticsStatus === 'delivered' ? 'bg-green-50 text-green-600 border-green-100' :
-                                                                                ['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) ? 'bg-red-50 text-red-600 border-red-100' :
-                                                                                    'bg-slate-50 text-slate-600 border-slate-100'
-                                                            }`}>
-                                                            {order.logisticsStatus === 'pending' && <Clock size={10} />}
-                                                            {order.logisticsStatus === 'ready-to-ship' && <Package size={10} />}
-                                                            {order.logisticsStatus === 'awb-assigned' && <FileText size={10} />}
-                                                            {order.logisticsStatus === 'pickup-scheduled' && <Truck size={10} />}
-                                                            {order.logisticsStatus === 'in-transit' && <Truck size={10} />}
-                                                            {order.logisticsStatus === 'delivered' && <CheckCircle size={10} />}
-                                                            {['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) && <XCircle size={10} />}
-                                                            <span>{order.logisticsStatus.replace(/-/g, ' ')}</span>
-                                                        </div>
-                                                        {['awb-assigned', 'pickup-scheduled'].includes(order.logisticsStatus) &&
-                                                            <div className="text-[9px] text-slate-400 mt-1 font-semibold pl-1">Waiting for Courier</div>
-                                                        }
-                                                    </div>
+                                                    <div
+  className={`text-[9px] font-black uppercase px-2 py-1 rounded-md inline-flex items-center gap-1 border ${
+    order.paymentStatus !== 'completed'
+      ? 'bg-amber-50 text-amber-600 border-amber-100'
+      : order.logisticsStatus === 'pending'
+      ? 'bg-orange-50 text-orange-600 border-orange-100'
+      : order.logisticsStatus === 'ready-to-ship'
+      ? 'bg-blue-50 text-blue-600 border-blue-100'
+      : order.logisticsStatus === 'awb-assigned'
+      ? 'bg-purple-50 text-purple-600 border-purple-100'
+      : order.logisticsStatus === 'pickup-scheduled'
+      ? 'bg-yellow-50 text-yellow-600 border-yellow-100'
+      : order.logisticsStatus === 'in-transit'
+      ? 'bg-indigo-50 text-indigo-600 border-indigo-100'
+      : order.logisticsStatus === 'delivered'
+      ? 'bg-green-50 text-green-600 border-green-100'
+      : ['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus)
+      ? 'bg-red-50 text-red-600 border-red-100'
+      : 'bg-slate-50 text-slate-600 border-slate-100'
+  }`}
+>
+  {order.paymentStatus !== 'completed' ? (
+    <>
+      <Clock size={10} />
+      <span>Payment Pending</span>
+    </>
+  ) : (
+    <>
+      <span>{order.logisticsStatus.replace(/-/g, ' ')}</span>
+    </>
+  )}
+</div>
 
                                                     {/* Action */}
                                                     <div className="col-span-2 text-right">
@@ -854,7 +873,7 @@ const SellerDashboard = () => {
                             {/* MOQ and Images */}
                             <div>
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Product Images {!isEdit && '*'} (Max 10)</label>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Product Images {!isEdit && '*'} (Max 10) & (Min 3)</label>
                                     <div className="flex flex-wrap gap-2">
                                         {previews.map((url, idx) => (
                                             <div key={idx} className="w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 relative group">

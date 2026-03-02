@@ -98,7 +98,7 @@ const ProductDetail = () => {
     };
 
     const currentUnitPrice = getPriceForQuantity(quantity);
-    const totalPriceWithGST = Math.round(currentUnitPrice * (1 + (product?.gstPercentage || 0) / 100));
+    const totalPriceWithGST =currentUnitPrice * (1 + (product?.gstPercentage || 0) / 100);
     const totalOrderValue = totalPriceWithGST * quantity;
 
     const availableQuantities = product ? [
@@ -296,7 +296,7 @@ const ProductDetail = () => {
                                 <span className="text-sm font-medium text-slate-400">+ {product.gstPercentage}% GST</span>
                             </div>
                             {quantity > 1 && (
-                                <div className="mt-1 text-primary font-bold text-sm">
+                                <div className="mt-1 text-red-500 font-bold text-sm">
                                     Total Value: ₹{totalOrderValue.toLocaleString()}
                                 </div>
                             )}

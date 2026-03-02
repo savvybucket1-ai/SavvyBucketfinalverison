@@ -31,10 +31,14 @@ const videoStorage = new CloudinaryStorage({
 
 const docStorage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-        folder: 'savvy_bucket_docs',
-        resource_type: 'auto', // Allow images (jpg/png) and raw files (pdf/doc)
-        allowed_formats: ['jpg', 'png', 'jpeg', 'pdf', 'doc', 'docx']
+    params: async (req, file) => {
+        const isPdf = file.mimetype === 'application/pdf';
+
+        return {
+            folder: 'savvy_bucket_docs',
+            resource_type: isPdf ? 'raw' : 'image',
+            allowed_formats: ['jpg', 'png', 'jpeg', 'pdf', 'doc', 'docx']
+        };
     }
 });
 

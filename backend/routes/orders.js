@@ -124,7 +124,7 @@ router.post('/create-easebuzz-session', auth(['buyer', 'seller', 'admin']), asyn
                 adminCommission: Math.round(adminCommission),
                 sellerEarning: Math.round(sellerEarning),
                 paymentStatus: 'pending',
-                orderStatus: 'processing',
+                orderStatus: 'awaiting_payment',
                 logisticsStatus: 'pending',
                 paymentGateway: 'easebuzz',
                 easebuzzTransactionId: txnid,
@@ -220,20 +220,21 @@ router.post('/easebuzz-callback', express.urlencoded({ extended: true }), async 
 
         const { txnid, status } = req.body;
 
-        if (status === 'success') {
+         if (status === 'success' || status === 'prepaid') {
             const orders = await Order.find({ easebuzzTransactionId: txnid });
 
             if (orders.length > 0) {
                 // Update all orders in this transaction
                 await Order.updateMany(
-                    { easebuzzTransactionId: txnid },
-                    {
-                        $set: {
-                            paymentStatus: 'completed',
-                            easebuzzTransactionId: req.body.easepayid || txnid
-                        }
-                    }
-                );
+  { easebuzzTransactionId: txnid },
+  {
+    $set: {
+      paymentStatus: 'completed',
+      easebuzzPaymentId: req.body.easepayid, // store separately
+      orderStatus: 'confirmed'
+    }
+  }
+);
 
                 // Clear cart (Optional: Frontend usually clears it on success page, but good to know)
                 console.log(`Payment success for transaction ${txnid}. ${orders.length} orders confirmed.`);
