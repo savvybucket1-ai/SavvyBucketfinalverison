@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader, getCurrentUser } from '../utils/auth';
-import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video, UserPlus, FileText, CheckCircle, XCircle, Menu, Wallet, Clock } from 'lucide-react';
 import AdminInfluencerVideos from './AdminInfluencerVideos';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/DashboardSidebar';
+
+import API_BASE_URL from '../config';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -12,6 +14,7 @@ const AdminDashboard = () => {
     const [approvedProducts, setApprovedProducts] = useState([]);
     const [editingProduct, setEditingProduct] = useState(null);
     const [approvalData, setApprovalData] = useState({ adminPrice: '', commission: '', title: '', description: '', moq: '', hsnCode: '', gstPercentage: '', variations: [], tieredPricing: [], category: '', stock: '', imageUrls: [] });
+    const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Dashboard Analytics State
     const [dashboardStats, setDashboardStats] = useState(null);
@@ -23,6 +26,7 @@ const AdminDashboard = () => {
     const [sellerFilter, setSellerFilter] = useState('');
 
     const [sellers, setSellers] = useState([]);
+    const [sellerRequests, setSellerRequests] = useState([]);
     const [buyers, setBuyers] = useState([]);
     const [commission, setCommission] = useState('');
     const [commissionInput, setCommissionInput] = useState('');
@@ -44,8 +48,7 @@ const AdminDashboard = () => {
             fetchDashboardStats(),
             fetchPending(),
             fetchSellers(),
-            fetchBuyers(),
-            fetchCommission(),
+            fetchSellerRequests(),
             fetchBuyers(),
             fetchCommission(),
             fetchOrders(),
@@ -56,7 +59,7 @@ const AdminDashboard = () => {
 
     const fetchDashboardStats = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/analytics/dashboard-stats', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/analytics/dashboard-stats`, { headers: getAuthHeader() });
             setDashboardStats(res.data);
         } catch (err) {
             console.error('Error fetching dashboard stats:', err);
@@ -65,7 +68,7 @@ const AdminDashboard = () => {
 
     const fetchOrders = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/orders/my-orders', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/orders/my-orders`, { headers: getAuthHeader() });
             setOrders(res.data);
         } catch (err) {
             console.error('Error fetching orders:', err);
@@ -74,16 +77,49 @@ const AdminDashboard = () => {
 
     const fetchSellers = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/auth/sellers', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/auth/sellers`, { headers: getAuthHeader() });
             setSellers(res.data);
         } catch (err) {
             console.error('Error fetching sellers:', err);
         }
     };
 
+    const fetchSellerRequests = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/auth/admin/pending-sellers`, { headers: getAuthHeader() });
+            setSellerRequests(res.data);
+        } catch (err) {
+            console.error('Error fetching seller requests:', err);
+        }
+    };
+
+    const handleApproveSeller = async (id) => {
+        try {
+            await axios.patch(`${API_BASE_URL}/api/auth/admin/approve-seller/${id}`, {}, { headers: getAuthHeader() });
+            alert('Seller Approved Successfully');
+            fetchSellerRequests();
+            fetchSellers();
+        } catch (err) {
+            alert('Failed to approve seller');
+        }
+    };
+
+    const handleRejectSeller = async (id, sellerName) => {
+        if (!window.confirm(`Are you sure you want to reject ${sellerName}'s seller registration? This action cannot be undone and the seller will be notified via email.`)) {
+            return;
+        }
+        try {
+            await axios.delete(`${API_BASE_URL}/api/auth/admin/reject-seller/${id}`, { headers: getAuthHeader() });
+            alert('Seller Rejected Successfully. Notification email has been sent.');
+            fetchSellerRequests();
+        } catch (err) {
+            alert('Failed to reject seller');
+        }
+    };
+
     const fetchBuyers = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/analytics/buyers', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/analytics/buyers`, { headers: getAuthHeader() });
             setBuyers(res.data);
         } catch (err) {
             console.error('Error fetching buyers:', err);
@@ -92,7 +128,7 @@ const AdminDashboard = () => {
 
     const fetchCommission = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/settings/default_commission');
+            const res = await axios.get(`${API_BASE_URL}/api/settings/default_commission`);
             setCommission(res.data.value);
             setCommissionInput(res.data.value);
         } catch (err) {
@@ -103,7 +139,7 @@ const AdminDashboard = () => {
 
     const handleUpdateCommission = async () => {
         try {
-            await axios.put('http://localhost:5000/api/settings',
+            await axios.put(`${API_BASE_URL}/api/settings`,
                 { key: 'default_commission', value: commissionInput, description: ' Default platform commission in %' },
                 { headers: getAuthHeader() }
             );
@@ -116,7 +152,7 @@ const AdminDashboard = () => {
 
     const fetchPending = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/products/admin/pending', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/products/admin/pending`, { headers: getAuthHeader() });
             setPendingProducts(res.data);
         } catch (err) {
             console.error('Error fetching pending products:', err);
@@ -125,7 +161,7 @@ const AdminDashboard = () => {
 
     const fetchApproved = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/products/admin/approved', { headers: getAuthHeader() });
+            const res = await axios.get(`${API_BASE_URL}/api/products/admin/approved`, { headers: getAuthHeader() });
             setApprovedProducts(res.data);
         } catch (err) {
             console.error('Error fetching approved products:', err);
@@ -136,13 +172,36 @@ const AdminDashboard = () => {
         try {
             let payload = { ...approvalData, status };
 
-            // Use the first row of tiered pricing as the main price and MOQ if available
+            // Ensure numeric fields are correctly typed
+            payload.stock = parseInt(payload.stock) || 0;
+            payload.commission = parseFloat(payload.commission) || 0;
+            if (payload.hsnCode) payload.hsnCode = String(payload.hsnCode);
+
+            // Process Tiered Pricing
             if (payload.tieredPricing && payload.tieredPricing.length > 0) {
-                payload.adminPrice = payload.tieredPricing[0].price;
-                payload.moq = payload.tieredPricing[0].moq;
+                // Parse strings to numbers for all tiers
+                payload.tieredPricing = payload.tieredPricing.map(t => ({
+                    ...t,
+                    moq: parseInt(t.moq) || 1,
+                    price: parseFloat(t.price) || 0,
+                    length: parseFloat(t.length) || 0,
+                    breadth: parseFloat(t.breadth || t.width) || 0,
+                    height: parseFloat(t.height) || 0,
+                    weight: parseFloat(t.weight) || 0
+                }));
+
+                // Sort by MOQ to find base tier
+                const sortedTiers = [...payload.tieredPricing].sort((a, b) => a.moq - b.moq);
+
+                // Set main price/moq from base tier
+                payload.adminPrice = sortedTiers[0].price;
+                payload.moq = sortedTiers[0].moq;
+            } else {
+                // Fallback for non-tiered products if adminPrice became string/invalid
+                payload.adminPrice = parseFloat(payload.adminPrice) || 0;
             }
 
-            await axios.patch(`http://localhost:5000/api/products/admin/approve/${id}`,
+            await axios.patch(`${API_BASE_URL}/api/products/admin/approve/${id}`,
                 payload,
                 { headers: getAuthHeader() }
             );
@@ -156,7 +215,7 @@ const AdminDashboard = () => {
 
     const handleToggleBlock = async (id) => {
         try {
-            await axios.patch(`http://localhost:5000/api/auth/sellers/toggle-block/${id}`, {}, { headers: getAuthHeader() });
+            await axios.patch(`${API_BASE_URL}/api/auth/sellers/toggle-block/${id}`, {}, { headers: getAuthHeader() });
             fetchSellers();
         } catch (err) {
             alert('Failed to update seller status');
@@ -174,7 +233,10 @@ const AdminDashboard = () => {
     const menuItems = [
         { label: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
         { label: 'Product Approvals', icon: Package, path: '/admin/approvals' },
+        { label: 'Trending Products', icon: TrendingUp, path: '/admin/approved-products' },
         { label: 'Orders', icon: ShoppingCart, path: '/admin/orders' },
+        { label: 'Seller Payouts', icon: Wallet, path: '/admin/payouts' },
+        { label: 'Seller Requests', icon: UserPlus, path: '/admin/seller-requests' },
         { label: 'Sellers', icon: Users, path: '/admin/sellers' },
         { label: 'Buyers', icon: UserCheck, path: '/admin/buyers' },
         { label: 'Influencer Videos', icon: Video, path: '/admin/videos' },
@@ -194,31 +256,36 @@ const AdminDashboard = () => {
 
     return (
         <div className="flex min-h-screen bg-[#f1f5f9]">
-            <Sidebar menuItems={menuItems} />
+            <Sidebar menuItems={menuItems} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
                 {/* Header Area */}
-                <header className="bg-[#1e293b] text-white px-8 py-4 flex justify-between items-center shadow-md">
+                <header className="bg-[#1e293b] text-white px-4 md:px-8 py-4 flex justify-between items-center shadow-md sticky top-0 z-30">
                     <div className="flex items-center space-x-4">
+                        <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 hover:bg-slate-700 rounded-lg transition">
+                            <Menu size={20} />
+                        </button>
                         <span className="text-sm font-bold opacity-80 flex items-center"><Package size={16} className="mr-2" /> B2B Marketplace</span>
                     </div>
-                    <div className="flex items-center space-x-6">
+                    <div className="flex items-center space-x-4 md:space-x-6">
                         <Search size={20} className="text-slate-400 cursor-pointer hover:text-white" />
-                        <div className="flex items-center space-x-3 border-l border-slate-700 pl-6 cursor-pointer group">
+                        <div className="flex items-center space-x-3 border-l border-slate-700 pl-4 md:pl-6 cursor-pointer group">
                             <div className="w-8 h-8 bg-slate-600 rounded-full flex items-center justify-center overflow-hidden">
                                 <User size={20} />
                             </div>
-                            <span className="text-sm font-bold group-hover:text-primary transition">{getCurrentUser()?.name || 'Admin'} <ChevronRight size={14} className="inline ml-1" /></span>
+                            <span className="text-sm font-bold group-hover:text-primary transition hidden md:flex items-center">
+                                {getCurrentUser()?.name || 'Admin'} <ChevronRight size={14} className="inline ml-1" />
+                            </span>
                         </div>
                     </div>
                 </header>
 
-                <main className="p-8">
+                <main className="p-4 md:p-8">
                     <Routes>
                         <Route path="/" element={
                             <>
                                 {/* Enhanced Summary Cards */}
-                                <div className="grid grid-cols-4 gap-6 mb-8">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                                     <div className="bg-[#f97316] p-6 rounded-xl shadow-lg shadow-orange-500/20 text-white relative overflow-hidden group hover:scale-[1.02] transition cursor-pointer" onClick={() => navigate('/admin/approvals')}>
                                         <div className="relative z-10 font-bold opacity-90 text-sm">Pending Products</div>
                                         <div className="relative z-10 text-5xl font-black mt-2">{dashboardStats?.pendingProducts || 0}</div>
@@ -264,7 +331,7 @@ const AdminDashboard = () => {
                                 </div>
 
                                 {/* New Revenue & Stats Cards */}
-                                <div className="grid grid-cols-3 gap-6 mb-8">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Revenue</h3>
@@ -296,45 +363,47 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-5 gap-8">
+                                <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
                                     {/* Recent Orders Table */}
-                                    <div className="col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="xl:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                                             <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">Recent Orders Overview</h3>
                                         </div>
-                                        <table className="w-full text-left">
-                                            <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                                                <tr>
-                                                    <th className="px-6 py-4">Order ID</th>
-                                                    <th className="px-6 py-4">Customer</th>
-                                                    <th className="px-6 py-4">Amount</th>
-                                                    <th className="px-6 py-4 text-right">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-50 text-sm">
-                                                {orders.length > 0 ? orders.slice(0, 5).map((ord, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-50 transition">
-                                                        <td className="px-6 py-4 font-black text-slate-800">#{ord._id.slice(-6)}</td>
-                                                        <td className="px-6 py-4 text-slate-500 font-bold">{ord.buyerId?.name || 'Customer'}</td>
-                                                        <td className="px-6 py-4 font-black text-slate-700">₹{ord.totalAmount}</td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${ord.logisticsStatus === 'delivered' ? 'text-green-600 bg-green-50' :
-                                                                ord.logisticsStatus === 'dispatched' ? 'text-blue-600 bg-blue-50' :
-                                                                    'text-orange-600 bg-orange-50'
-                                                                }`}>{ord.logisticsStatus}</span>
-                                                        </td>
-                                                    </tr>
-                                                )) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                                                     <tr>
-                                                        <td colSpan="4" className="px-6 py-8 text-center text-slate-400 font-bold">No recent orders.</td>
+                                                        <th className="px-6 py-4">Order ID</th>
+                                                        <th className="px-6 py-4">Customer</th>
+                                                        <th className="px-6 py-4">Amount</th>
+                                                        <th className="px-6 py-4 text-right">Status</th>
                                                     </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50 text-sm">
+                                                    {orders.length > 0 ? orders.slice(0, 5).map((ord, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50 transition">
+                                                            <td className="px-6 py-4 font-black text-slate-800">#{ord._id.slice(-6)}</td>
+                                                            <td className="px-6 py-4 text-slate-500 font-bold whitespace-nowrap">{ord.buyerId?.name || 'Customer'}</td>
+                                                            <td className="px-6 py-4 font-black text-slate-700">₹{ord.totalAmount}</td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${ord.logisticsStatus === 'delivered' ? 'text-green-600 bg-green-50' :
+                                                                    ord.logisticsStatus === 'dispatched' ? 'text-blue-600 bg-blue-50' :
+                                                                        'text-orange-600 bg-orange-50'
+                                                                    }`}>{ord.logisticsStatus}</span>
+                                                            </td>
+                                                        </tr>
+                                                    )) : (
+                                                        <tr>
+                                                            <td colSpan="4" className="px-6 py-8 text-center text-slate-400 font-bold">No recent orders.</td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
 
                                     {/* Recent Activity Feed */}
-                                    <div className="col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                         <div className="p-6 border-b border-slate-100 bg-slate-50/50">
                                             <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">Recent Activity</h3>
                                         </div>
@@ -387,70 +456,153 @@ const AdminDashboard = () => {
                                         </select>
                                     </div>
                                 </div>
-                                <table className="w-full text-left">
-                                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                                        <tr>
-                                            <th className="px-6 py-4">Product</th>
-                                            <th className="px-6 py-4 text-center">Seller</th>
-                                            <th className="px-6 py-4 text-center">Seller Price</th>
-                                            <th className="px-6 py-4 text-center">MOQ</th>
-                                            <th className="px-6 py-4 text-right">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 text-sm">
-                                        {filteredPendingProducts.length > 0 ? filteredPendingProducts.map(p => (
-                                            <tr key={p._id} className="hover:bg-slate-50 transition">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
-                                                            <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
-                                                        </div>
-                                                        <span className="font-bold text-slate-700">{p.title}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.sellerPrice}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingProduct(p._id);
-                                                            setApprovalData({
-                                                                adminPrice: p.sellerPrice + (p.sellerPrice * (commission / 100)),
-                                                                commission: commission,
-                                                                title: p.title,
-                                                                description: p.description,
-                                                                moq: p.moq,
-                                                                hsnCode: p.hsnCode,
-                                                                gstPercentage: p.gstPercentage,
-                                                                variations: p.variations || [],
-                                                                tieredPricing: p.tieredPricing || [],
-                                                                category: p.category,
-                                                                stock: p.stock,
-                                                                imageUrls: p.imageUrls || []
-                                                            });
-                                                        }}
-                                                        className="bg-primary text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center ml-auto"
-                                                    >
-                                                        Review & Approve <ChevronRight size={12} className="ml-1" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        )) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left min-w-[700px]">
+                                        <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                                             <tr>
-                                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No pending items found.</td>
+                                                <th className="px-6 py-4">Product</th>
+                                                <th className="px-6 py-4 text-center">Seller</th>
+                                                <th className="px-6 py-4 text-center">Seller Price</th>
+                                                <th className="px-6 py-4 text-center">MOQ</th>
+                                                <th className="px-6 py-4 text-right">Action</th>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 text-sm">
+                                            {filteredPendingProducts.length > 0 ? filteredPendingProducts.map(p => (
+                                                <tr key={p._id} className="hover:bg-slate-50 transition">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                                                                <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
+                                                            </div>
+                                                            <span className="font-bold text-slate-700">{p.title}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.sellerPrice}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingProduct(p._id);
+                                                                setApprovalData({
+                                                                    adminPrice: p.sellerPrice + (p.sellerPrice * (commission / 100)),
+                                                                    commission: commission,
+                                                                    title: p.title,
+                                                                    description: p.description,
+                                                                    moq: p.moq,
+                                                                    hsnCode: p.hsnCode,
+                                                                    gstPercentage: p.gstPercentage,
+                                                                    variations: p.variations || [],
+                                                                    tieredPricing: (p.tieredPricing || []).map(t => ({
+                                                                        ...t,
+                                                                        price: t.price + (t.price * (commission / 100))
+                                                                    })),
+                                                                    category: p.category,
+                                                                    stock: p.stock,
+                                                                    imageUrls: p.imageUrls || []
+                                                                });
+                                                            }}
+                                                            className="bg-primary text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center ml-auto"
+                                                        >
+                                                            Review & Approve <ChevronRight size={12} className="ml-1" />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )) : (
+                                                <tr>
+                                                    <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No pending items found.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         } />
                         <Route path="/orders" element={<AdminOrdersView orders={orders} />} />
+                        <Route path="/seller-requests" element={
+                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
+                                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Pending Seller Registrations</h2>
+                                </div>
+                                {sellerRequests.length > 0 ? (
+                                    <div className="divide-y divide-slate-100">
+                                        {sellerRequests.map(s => (
+                                            <div key={s._id} className="p-6 hover:bg-slate-50 transition">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <h3 className="font-black text-lg text-slate-800">{s.name}</h3>
+                                                        <p className="text-sm text-slate-500">{s.email} | {s.countryCode}{s.phone}</p>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleApproveSeller(s._id)}
+                                                            className="bg-green-600 text-white text-xs font-black uppercase px-5 py-2 rounded-lg hover:bg-green-700 transition flex items-center gap-1 shadow-lg shadow-green-500/20"
+                                                        >
+                                                            <CheckCircle size={14} /> Approve
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleRejectSeller(s._id, s.name)}
+                                                            className="bg-red-600 text-white text-xs font-black uppercase px-5 py-2 rounded-lg hover:bg-red-700 transition flex items-center gap-1 shadow-lg shadow-red-500/20"
+                                                        >
+                                                            <XCircle size={14} /> Reject
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">GST Number</p>
+                                                        <p className="font-bold text-slate-700">{s.gstNumber || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Bank A/C</p>
+                                                        <p className="font-bold text-slate-700">{s.bankDetails?.accountNumber || 'N/A'}</p>
+                                                        <p className="text-xs text-slate-500">{s.bankDetails?.accountName} | {s.bankDetails?.ifscCode}</p>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-3 rounded-lg">
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Registered On</p>
+                                                        <p className="font-bold text-slate-700">{new Date(s.createdAt).toLocaleDateString()}</p>
+                                                    </div>
+                                                    <div className="bg-blue-50 p-3 rounded-lg col-span-3">
+                                                        <p className="text-[10px] font-bold text-blue-400 uppercase mb-1">Pickup Address</p>
+                                                        <p className="font-medium text-slate-600 text-xs">{s.pickupAddress || 'N/A'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-4 flex gap-3 flex-wrap">
+                                                    {s.gstDocument && <a href={s.gstDocument} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"><FileText size={14} /> View GST Doc</a>}
+                                                    {s.panDocument && <a href={s.panDocument} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"><FileText size={14} /> View PAN</a>}
+                                                    {s.aadharDocument && <a href={s.aadharDocument} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"><FileText size={14} /> View Aadhar</a>}
+                                                    {s.cancelledCheck && <a href={s.cancelledCheck} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-green-600 flex items-center gap-1 hover:underline"><FileText size={14} /> View Cancelled Check</a>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="p-12 text-center text-slate-400 font-bold italic">No pending seller registrations.</div>
+                                )}
+                            </div>
+                        } />
                         <Route path="/sellers" element={<SellersView sellers={sellers} handleToggleBlock={handleToggleBlock} />} />
                         <Route path="/buyers" element={<BuyersView buyers={buyers} />} />
-                        <Route path="/approved-products" element={<ApprovedProductsView products={approvedProducts} />} />
+                        <Route path="/approved-products" element={<ApprovedProductsView products={approvedProducts} onToggleTrending={async (id) => {
+                            // Optimistic Update
+                            const previousProducts = [...approvedProducts];
+                            setApprovedProducts(prev => prev.map(p =>
+                                p._id === id ? { ...p, isTrending: !p.isTrending } : p
+                            ));
+
+                            try {
+                                await axios.patch(`${API_BASE_URL}/api/products/admin/toggle-trending/${id}`, {}, { headers: getAuthHeader() });
+                            } catch (err) {
+                                // Revert on failure
+                                setApprovedProducts(previousProducts);
+                                alert('Failed to toggle trending status');
+                            }
+                        }} />} />
+                        <Route path="/payouts" element={<PayoutsView />} />
+                        <Route path="/orders" element={<OrdersView orders={orders} />} />
                         <Route path="/videos" element={<AdminInfluencerVideos />} />
                         <Route path="/settings" element={
                             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
@@ -654,7 +806,7 @@ const AdminDashboard = () => {
 const AdminOrdersView = ({ orders }) => {
     const handleUpdateLogistics = async (id, status) => {
         try {
-            await axios.patch(`http://localhost:5000/api/orders/admin/update-logistics/${id}`,
+            await axios.patch(`${API_BASE_URL}/api/orders/admin/update-logistics/${id}`,
                 { logisticsStatus: status },
                 { headers: getAuthHeader() }
             );
@@ -719,6 +871,7 @@ const AdminOrdersView = ({ orders }) => {
 
 const SellersView = ({ sellers, handleToggleBlock }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedSeller, setSelectedSeller] = useState(null);
 
     const filteredSellers = sellers.filter(s =>
         s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -737,40 +890,162 @@ const SellersView = ({ sellers, handleToggleBlock }) => {
                     className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
                 />
             </div>
-            <table className="w-full text-left">
-                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                    <tr>
-                        <th className="px-6 py-4">Seller Name</th>
-                        <th className="px-6 py-4">Email</th>
-                        <th className="px-6 py-4 text-center">Products</th>
-                        <th className="px-6 py-4 text-center">Earnings</th>
-                        <th className="px-6 py-4 text-right">Action</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-sm">
-                    {filteredSellers.length > 0 ? filteredSellers.map(seller => (
-                        <tr key={seller._id} className="hover:bg-slate-50 transition">
-                            <td className="px-6 py-4 font-bold text-slate-700">{seller.name}</td>
-                            <td className="px-6 py-4 text-slate-500">{seller.email}</td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-700">{seller.productCount || 0}</td>
-                            <td className="px-6 py-4 text-center font-black text-green-600">₹{seller.totalEarnings || 0}</td>
-                            <td className="px-6 py-4 text-right">
-                                <button
-                                    onClick={() => handleToggleBlock(seller._id)}
-                                    className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg transition ${seller.isBlocked ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-red-600 bg-red-50 hover:bg-red-100'
-                                        }`}
-                                >
-                                    {seller.isBlocked ? 'Unblock' : 'Block'}
-                                </button>
-                            </td>
-                        </tr>
-                    )) : (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[700px]">
+                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                         <tr>
-                            <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No sellers found.</td>
+                            <th className="px-6 py-4">Seller Name</th>
+                            <th className="px-6 py-4">Email</th>
+                            <th className="px-6 py-4 text-center">Products</th>
+                            <th className="px-6 py-4 text-center">Earnings</th>
+                            <th className="px-6 py-4 text-right">Action</th>
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-sm">
+                        {filteredSellers.length > 0 ? filteredSellers.map(seller => (
+                            <tr key={seller._id} className="hover:bg-slate-50 transition">
+                                <td className="px-6 py-4 font-bold text-slate-700">{seller.name}</td>
+                                <td className="px-6 py-4 text-slate-500">{seller.email}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">{seller.productCount || 0}</td>
+                                <td className="px-6 py-4 text-center font-black text-green-600">₹{seller.totalEarnings || 0}</td>
+                                <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                                    <button
+                                        onClick={() => setSelectedSeller(seller)}
+                                        className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 transition"
+                                    >
+                                        Details
+                                    </button>
+                                    <button
+                                        onClick={() => handleToggleBlock(seller._id)}
+                                        className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg transition ${seller.isBlocked ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-red-600 bg-red-50 hover:bg-red-100'
+                                            }`}
+                                    >
+                                        {seller.isBlocked ? 'Unblock' : 'Block'}
+                                    </button>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No sellers found.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Seller Details Modal */}
+            {selectedSeller && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full border border-slate-200 my-8 relative">
+                        <button
+                            onClick={() => setSelectedSeller(null)}
+                            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+                        >
+                            <XCircle size={24} />
+                        </button>
+
+                        <h2 className="text-xl font-black text-slate-800 mb-6 uppercase tracking-tight flex items-center border-b border-slate-100 pb-4">
+                            <User className="mr-2 text-primary" /> Seller Profile
+                        </h2>
+
+                        <div className="space-y-6">
+                            {/* Basic Info */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Full Name</p>
+                                    <p className="font-bold text-slate-800 text-lg">{selectedSeller.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                                    <span className={`text-[10px] font-black uppercase px-2 py-1 rounded ${selectedSeller.isBlocked ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                                        {selectedSeller.isBlocked ? 'Blocked' : 'Active'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Email</p>
+                                    <p className="font-medium text-slate-700">{selectedSeller.email}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Phone</p>
+                                    <p className="font-medium text-slate-700">{selectedSeller.countryCode} {selectedSeller.phone}</p>
+                                </div>
+                            </div>
+
+                            {/* Business & Bank Info */}
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <h3 className="font-bold text-slate-700 mb-3 flex items-center text-sm uppercase">Business Details</h3>
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">GST Number</p>
+                                        <p className="font-bold text-slate-700">{selectedSeller.gstNumber || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Pickup Address</p>
+                                        <p className="font-medium text-slate-600 text-xs">{selectedSeller.pickupAddress || 'N/A'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="border-t border-slate-200 pt-3">
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Bank Information</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                            <p className="text-[9px] text-slate-400 uppercase">Account No.</p>
+                                            <p className="font-mono font-bold text-slate-700 text-sm">{selectedSeller.bankDetails?.accountNumber || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] text-slate-400 uppercase">IFSC Code</p>
+                                            <p className="font-mono font-bold text-slate-700 text-sm">{selectedSeller.bankDetails?.ifscCode || 'N/A'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] text-slate-400 uppercase">Account Name</p>
+                                            <p className="font-bold text-slate-700 text-sm">{selectedSeller.bankDetails?.accountName || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Documents */}
+                            <div>
+                                <h3 className="font-bold text-slate-700 mb-3 flex items-center text-sm uppercase">Documents</h3>
+                                <div className="flex gap-3 flex-wrap">
+                                    {selectedSeller.gstDocument ?
+                                        <a href={selectedSeller.gstDocument} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center hover:bg-blue-100 transition">
+                                            <FileText size={14} className="mr-1" /> GST Certificate
+                                        </a> : <span className="text-xs text-slate-400">No GST Doc</span>
+                                    }
+                                    {selectedSeller.panDocument ?
+                                        <a href={selectedSeller.panDocument} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center hover:bg-blue-100 transition">
+                                            <FileText size={14} className="mr-1" /> PAN Card
+                                        </a> : <span className="text-xs text-slate-400">No PAN Doc</span>
+                                    }
+                                    {selectedSeller.aadharDocument ?
+                                        <a href={selectedSeller.aadharDocument} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold flex items-center hover:bg-blue-100 transition">
+                                            <FileText size={14} className="mr-1" /> Aadhar Card
+                                        </a> : <span className="text-xs text-slate-400">No Aadhar Doc</span>
+                                    }
+                                    {selectedSeller.cancelledCheck ?
+                                        <a href={selectedSeller.cancelledCheck} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-green-50 text-green-600 rounded-lg text-xs font-bold flex items-center hover:bg-green-100 transition">
+                                            <FileText size={14} className="mr-1" /> Cancelled Cheque
+                                        </a> : <span className="text-xs text-slate-400">No Cheque Doc</span>
+                                    }
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end pt-4">
+                                <button
+                                    onClick={() => setSelectedSeller(null)}
+                                    className="bg-slate-100 text-slate-600 px-6 py-2 rounded-lg font-bold uppercase text-xs hover:bg-slate-200 transition"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -795,41 +1070,43 @@ const BuyersView = ({ buyers }) => {
                     className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
                 />
             </div>
-            <table className="w-full text-left">
-                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                    <tr>
-                        <th className="px-6 py-4">Buyer Name</th>
-                        <th className="px-6 py-4">Email</th>
-                        <th className="px-6 py-4 text-center">Total Orders</th>
-                        <th className="px-6 py-4 text-center">Total Spent</th>
-                        <th className="px-6 py-4 text-center">Joined Date</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-sm">
-                    {filteredBuyers.length > 0 ? filteredBuyers.map(buyer => (
-                        <tr key={buyer._id} className="hover:bg-slate-50 transition">
-                            <td className="px-6 py-4 font-bold text-slate-700">{buyer.name}</td>
-                            <td className="px-6 py-4 text-slate-500">{buyer.email}</td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-700">{buyer.totalOrders || 0}</td>
-                            <td className="px-6 py-4 text-center font-black text-green-600">₹{buyer.totalSpent?.toLocaleString() || 0}</td>
-                            <td className="px-6 py-4 text-center text-slate-500 text-xs">
-                                {new Date(buyer.createdAt).toLocaleDateString()}
-                            </td>
-                        </tr>
-                    )) : (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[700px]">
+                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                         <tr>
-                            <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No buyers found.</td>
+                            <th className="px-6 py-4">Buyer Name</th>
+                            <th className="px-6 py-4">Email</th>
+                            <th className="px-6 py-4 text-center">Total Orders</th>
+                            <th className="px-6 py-4 text-center">Total Spent</th>
+                            <th className="px-6 py-4 text-center">Joined Date</th>
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-sm">
+                        {filteredBuyers.length > 0 ? filteredBuyers.map(buyer => (
+                            <tr key={buyer._id} className="hover:bg-slate-50 transition">
+                                <td className="px-6 py-4 font-bold text-slate-700">{buyer.name}</td>
+                                <td className="px-6 py-4 text-slate-500">{buyer.email}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">{buyer.totalOrders || 0}</td>
+                                <td className="px-6 py-4 text-center font-black text-green-600">₹{buyer.totalSpent?.toLocaleString() || 0}</td>
+                                <td className="px-6 py-4 text-center text-slate-500 text-xs">
+                                    {new Date(buyer.createdAt).toLocaleDateString()}
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No buyers found.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
 
 
 
-const ApprovedProductsView = ({ products }) => {
+const ApprovedProductsView = ({ products, onToggleTrending }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredProducts = products.filter(p =>
@@ -840,7 +1117,7 @@ const ApprovedProductsView = ({ products }) => {
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Approved Products</h2>
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Approved & Trending Products</h2>
                 <input
                     type="text"
                     placeholder="Search products..."
@@ -849,43 +1126,216 @@ const ApprovedProductsView = ({ products }) => {
                     className="px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
                 />
             </div>
-            <table className="w-full text-left">
-                <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                    <tr>
-                        <th className="px-6 py-4">Product</th>
-                        <th className="px-6 py-4 text-center">Seller</th>
-                        <th className="px-6 py-4 text-center">Price</th>
-                        <th className="px-6 py-4 text-center">Stock</th>
-                        <th className="px-6 py-4 text-right">Status</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50 text-sm">
-                    {filteredProducts.length > 0 ? filteredProducts.map(p => (
-                        <tr key={p._id} className="hover:bg-slate-50 transition">
-                            <td className="px-6 py-4">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
-                                        <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
-                                    </div>
-                                    <span className="font-bold text-slate-700">{p.title}</span>
-                                </div>
-                            </td>
-                            <td className="px-6 py-4 text-center">
-                                <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
-                            </td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.adminPrice}</td>
-                            <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
-                            <td className="px-6 py-4 text-right">
-                                <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-green-600 bg-green-50">Live</span>
-                            </td>
-                        </tr>
-                    )) : (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left min-w-[700px]">
+                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                         <tr>
-                            <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No approved products found.</td>
+                            <th className="px-6 py-4">Product</th>
+                            <th className="px-6 py-4 text-center">Seller</th>
+                            <th className="px-6 py-4 text-center">Price</th>
+                            <th className="px-6 py-4 text-center">Stock</th>
+                            <th className="px-6 py-4 text-center">Trending</th>
+                            <th className="px-6 py-4 text-right">Status</th>
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-sm">
+                        {filteredProducts.length > 0 ? filteredProducts.map(p => (
+                            <tr key={p._id} className="hover:bg-slate-50 transition">
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                                            <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
+                                        </div>
+                                        <span className="font-bold text-slate-700">{p.title}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
+                                </td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.adminPrice}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
+                                <td className="px-6 py-4 text-center">
+                                    <button
+                                        onClick={() => onToggleTrending(p._id)}
+                                        className={`p-2 rounded-full transition-colors ${p.isTrending ? 'bg-yellow-100 text-yellow-500' : 'bg-slate-100 text-slate-300 hover:text-yellow-400'}`}
+                                    >
+                                        <TrendingUp size={16} className={p.isTrending ? 'fill-current' : ''} />
+                                    </button>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                    <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-green-600 bg-green-50">Live</span>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No approved products found.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const OrdersView = ({ orders }) => {
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100">
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">All Orders</h2>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                        <tr>
+                            <th className="px-6 py-3">Order ID</th>
+                            <th className="px-6 py-3">Product</th>
+                            <th className="px-6 py-3">Buyer</th>
+                            <th className="px-6 py-3 text-right">Amount</th>
+                            <th className="px-6 py-3 text-center">Status</th>
+                            <th className="px-6 py-3 text-center">Logistics</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-xs">
+                        {orders.length > 0 ? orders.map(order => (
+                            <tr key={order._id} className="hover:bg-slate-50">
+                                <td className="px-6 py-4 font-mono font-bold text-slate-500">#{order._id.slice(-6)}</td>
+                                <td className="px-6 py-4 font-bold text-slate-700">
+                                    {order.productId?.title || <span className="text-red-400">Deleted Product</span>}
+                                    <div className="text-[10px] text-slate-400">Qty: {order.quantity}</div>
+                                </td>
+                                <td className="px-6 py-4 font-bold text-slate-600">{order.buyerId?.name || 'Unknown'}</td>
+                                <td className="px-6 py-4 text-right font-black text-slate-700">₹{order.totalAmount}</td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${order.orderStatus === 'delivered' ? 'bg-green-100 text-green-600' :
+                                        order.orderStatus === 'cancelled' ? 'bg-red-100 text-red-600' :
+                                            'bg-blue-50 text-blue-600'
+                                        }`}>{order.orderStatus}</span>
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className="bg-slate-100 text-slate-500 px-2 py-1 rounded text-[10px] font-black uppercase">{order.logisticsStatus}</span>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr><td colSpan="6" className="px-6 py-12 text-center text-slate-400 font-bold italic">No orders found.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const PayoutsView = () => {
+    const [payouts, setPayouts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedSeller, setSelectedSeller] = useState(null);
+
+    useEffect(() => {
+        fetchPayouts();
+    }, []);
+
+    const fetchPayouts = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/orders/admin/payouts`, { headers: getAuthHeader() });
+            setPayouts(res.data);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUpdatePayoutStatus = async (id, status) => {
+        if (!window.confirm(`Mark this payout as ${status.toUpperCase()}?`)) return;
+        try {
+            await axios.patch(`${API_BASE_URL}/api/orders/admin/payouts/${id}/status`, { status }, { headers: getAuthHeader() });
+            setPayouts(prev => prev.map(o => o._id === id ? { ...o, sellerPayoutStatus: status } : o));
+        } catch (err) {
+            alert('Error updating status');
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Seller Payouts</h2>
+                <button onClick={fetchPayouts} className="text-slate-400 hover:text-primary"><Clock size={18} /></button>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                        <tr>
+                            <th className="px-6 py-3">ID</th>
+                            <th className="px-6 py-3">Seller</th>
+                            <th className="px-6 py-3 text-right">Order Amt</th>
+                            <th className="px-6 py-3 text-right">Seller Price</th>
+                            <th className="px-6 py-3 text-right">Profit</th>
+                            <th className="px-6 py-3 text-center">Status</th>
+                            <th className="px-6 py-3 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-xs">
+                        {payouts.map(order => {
+                            const seller = order.productId?.sellerId || {};
+                            const profit = (order.totalAmount - order.sellerEarning).toFixed(2);
+
+                            return (
+                                <tr key={order._id} className="hover:bg-slate-50/50">
+                                    <td className="px-6 py-4 font-mono font-bold text-slate-500">#{order._id.slice(-6)}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="font-bold text-slate-700">{seller.name || 'Unknown'}</div>
+                                        <button onClick={() => setSelectedSeller(seller)} className="text-[10px] text-blue-500 font-bold hover:underline">View Account</button>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-bold text-slate-700">₹{order.totalAmount}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-blue-600">₹{order.sellerEarning}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-green-600">₹{profit}</td>
+                                    <td className="px-6 py-4 text-center">
+                                        <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${order.sellerPayoutStatus === 'paid' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                                            {order.sellerPayoutStatus}
+                                        </span>
+                                    </td>
+
+                                    <td className="px-6 py-4 text-center">
+                                        {order.sellerPayoutStatus === 'pending' ? (
+                                            <button onClick={() => handleUpdatePayoutStatus(order._id, 'paid')} className="bg-slate-800 text-white px-3 py-1 rounded font-bold text-[10px] hover:bg-slate-700 uppercase">
+                                                Mark Paid
+                                            </button>
+                                        ) : (
+                                            <button onClick={() => handleUpdatePayoutStatus(order._id, 'pending')} className="bg-slate-100 text-slate-500 border border-slate-200 px-3 py-1 rounded font-bold text-[10px] hover:bg-slate-200 uppercase">
+                                                Revert
+                                            </button>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {payouts.length === 0 && <tr><td colSpan="7" className="px-6 py-8 text-center text-slate-400 font-bold">No payouts found.</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+            {selectedSeller && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 relative">
+                        <button onClick={() => setSelectedSeller(null)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                        <h3 className="text-lg font-black text-slate-800 mb-4 uppercase">Account Details</h3>
+                        <div className="space-y-4">
+                            <div className="bg-slate-50 p-4 rounded-lg">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Account Name</p>
+                                <p className="font-bold text-slate-800">{selectedSeller.bankDetails?.accountName || 'N/A'}</p>
+                            </div>
+                            <div className="bg-slate-50 p-4 rounded-lg">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Account Number</p>
+                                <p className="font-mono font-bold text-slate-800 text-lg">{selectedSeller.bankDetails?.accountNumber || 'N/A'}</p>
+                            </div>
+                            <div className="bg-slate-50 p-4 rounded-lg">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">IFSC Code</p>
+                                <p className="font-mono font-bold text-slate-800">{selectedSeller.bankDetails?.ifscCode || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

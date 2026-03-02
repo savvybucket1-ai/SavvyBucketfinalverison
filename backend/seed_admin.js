@@ -12,15 +12,23 @@ const createAdmin = async () => {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('Connected to MongoDB');
 
-        const adminExists = await User.findOne({ email: 'admin@savvybucket.com' });
+        const adminEmail = process.env.ADMIN_EMAIL || 'admin@savvybucket12.com';
+        const adminPassword = process.env.ADMIN_PASSWORD || 'admin12';
+
+        const adminExists = await User.findOne({ email: adminEmail });
         if (adminExists) {
-            console.log('Admin user already exists');
+            console.log('Admin user already exists. Updating verification status...');
+            adminExists.isVerified = true;
+            adminExists.role = 'admin'; // Ensure role is correct
+            await adminExists.save();
+            console.log('Admin user updated.');
         } else {
             const admin = new User({
                 name: 'Super Admin',
-                email: 'admin@savvybucket.com',
-                password: 'admin',
-                role: 'admin'
+                email: adminEmail,
+                password: adminPassword,
+                role: 'admin',
+                isVerified: true
             });
 
             await admin.save();

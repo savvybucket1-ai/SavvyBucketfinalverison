@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader } from '../utils/auth';
 import { Trash2, Video, Upload, Search } from 'lucide-react';
+import API_BASE_URL from '../config';
 
 const AdminInfluencerVideos = () => {
     const [videos, setVideos] = useState([]);
@@ -19,7 +20,7 @@ const AdminInfluencerVideos = () => {
 
     const fetchVideos = async () => {
         try {
-            const res = await axios.get('http://localhost:5000/api/influencer-videos/list');
+            const res = await axios.get(`${API_BASE_URL}/api/influencer-videos/list`);
             setVideos(res.data);
         } catch (err) {
             console.error('Error fetching videos:', err);
@@ -29,7 +30,7 @@ const AdminInfluencerVideos = () => {
     const fetchProducts = async () => {
         try {
             // Fetching from buyer/list ensures we only see products that are "Live on Website" (Approved & Available)
-            const res = await axios.get('http://localhost:5000/api/products/buyer/list');
+            const res = await axios.get(`${API_BASE_URL}/api/products/buyer/list`);
             setProducts(res.data);
         } catch (err) {
             console.error('Error fetching products:', err);
@@ -50,7 +51,7 @@ const AdminInfluencerVideos = () => {
 
         try {
             setLoading(true);
-            await axios.post('http://localhost:5000/api/influencer-videos/upload', formData, {
+            await axios.post(`${API_BASE_URL}/api/influencer-videos/upload`, formData, {
                 headers: {
                     ...getAuthHeader(),
                     'Content-Type': 'multipart/form-data'
@@ -72,7 +73,7 @@ const AdminInfluencerVideos = () => {
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this video?')) return;
         try {
-            await axios.delete(`http://localhost:5000/api/influencer-videos/${id}`, { headers: getAuthHeader() });
+            await axios.delete(`${API_BASE_URL}/api/influencer-videos/${id}`, { headers: getAuthHeader() });
             fetchVideos();
         } catch (err) {
             alert('Failed to delete video');

@@ -4,6 +4,7 @@ const productSchema = new mongoose.Schema({
     title: { type: String, required: true },
     description: { type: String, required: true },
     category: { type: String, required: true },
+    subCategory: { type: String }, // New field for sub-categorization
     hsnCode: { type: String, required: true, minlength: 6 },
     gstPercentage: { type: Number, required: true },
     sellerPrice: { type: Number },
@@ -14,6 +15,9 @@ const productSchema = new mongoose.Schema({
     moq: { type: Number, default: 1 },
     stock: { type: Number, default: 0 },
     isAvailable: { type: Boolean, default: true },
+    isTrending: { type: Boolean, default: false },
+    rating: { type: Number, default: 0 },
+    reviewsCount: { type: Number, default: 0 },
     weight: { type: Number },
     dimensions: {
         length: { type: Number },

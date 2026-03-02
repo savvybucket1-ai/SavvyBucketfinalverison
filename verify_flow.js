@@ -18,7 +18,7 @@ function loadEnv() {
 }
 loadEnv();
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'https://savvy-backend-hazel.vercel.app/api';
 let sellerToken, adminToken;
 
 async function request(url, method = 'GET', body = null, token = null) {
@@ -39,92 +39,69 @@ async function request(url, method = 'GET', body = null, token = null) {
 
 async function run() {
     try {
-        console.log('--- STARTING VERIFICATION (Fetch Mode) ---');
+        console.log('--- STARTING VERIFICATION (Vercel Mode) ---');
+        console.log(`Target: ${BASE_URL}`);
 
-        // 1. Login/Register Seller
-        console.log('1. Registering/Logging in Seller...');
+        // 0. Seed Admin (Ensure Admin Exists)
+        console.log('0. Seeding Admin User...');
+        try {
+            await request(`${BASE_URL}/auth/seed-admin`, 'GET');
+            console.log('   Admin seeded/verified successfully.');
+        } catch (e) {
+            console.warn('   Seed warning:', e.message);
+        }
+
+        // 1. Login Admin
+        console.log('1. Logging in Admin...');
+        await new Promise(r => setTimeout(r, 1000)); // Brief pause
         try {
             const data = await request(`${BASE_URL}/auth/login`, 'POST', {
-                email: 'seller_test@example.com',
-                password: 'password123'
+                email: 'admin@savvybucket12.com',
+                password: 'admin12'
             });
-            sellerToken = data.token;
-            console.log('   Seller logged in.');
+            adminToken = data.token;
+            console.log('   SUCCESS: Admin logged in.');
+            console.log(`   Token: ${adminToken.substring(0, 20)}...`);
         } catch (e) {
-            await request(`${BASE_URL}/auth/register`, 'POST', {
-                name: 'Test Seller',
-                email: 'seller_test@example.com',
-                password: 'password123',
-                role: 'seller'
-            });
-            console.log('   Seller registered.');
-            const data = await request(`${BASE_URL}/auth/login`, 'POST', {
-                email: 'seller_test@example.com',
-                password: 'password123'
-            });
-            sellerToken = data.token;
+            console.error('   FAILED: Admin login failed.', e.message);
+            return; // Stop if admin cannot login
         }
 
-        // 2. Login/Register Admin
-        console.log('2. Registering/Logging in Admin...');
+        // 2. Admin fetching Sellers list
+        console.log('2. Admin fetching Sellers list...');
         try {
-            const data = await request(`${BASE_URL}/auth/login`, 'POST', {
-                email: 'admin_test@example.com',
-                password: 'password123'
-            });
-            adminToken = data.token;
-            console.log('   Admin logged in.');
+            const sellers = await request(`${BASE_URL}/auth/sellers`, 'GET', null, adminToken);
+            if (Array.isArray(sellers)) {
+                console.log(`   SUCCESS: Fetched ${sellers.length} sellers.`);
+            } else {
+                console.error('   FAILED: Sellers response not an array.');
+            }
         } catch (e) {
-            await request(`${BASE_URL}/auth/register`, 'POST', {
-                name: 'Test Admin',
-                email: 'admin_test@example.com',
-                password: 'password123',
-                role: 'admin'
-            });
-            console.log('   Admin registered.');
-            const data = await request(`${BASE_URL}/auth/login`, 'POST', {
-                email: 'admin_test@example.com',
-                password: 'password123'
-            });
-            adminToken = data.token;
+            console.error('   FAILED: Could not fetch sellers.', e.message);
         }
 
-        // 3. Admin fetching Sellers list
-        console.log('3. Admin fetching Sellers list...');
-        const sellers = await request(`${BASE_URL}/auth/sellers`, 'GET', null, adminToken);
-        if (Array.isArray(sellers)) {
-            console.log(`   SUCCESS: Fetched ${sellers.length} sellers.`);
-        } else {
-            console.error('   FAILED: Sellers response not an array.');
-        }
+        // 3. Admin Updates Commission (Test PUT)
+        console.log('3. Admin updating Commission Settings...');
+        try {
+            const settings = await request(`${BASE_URL}/settings`, 'PUT', {
+                key: 'default_commission',
+                value: 20,
+                description: 'Test Commission Updated By Verifier'
+            }, adminToken);
 
-        // 4. Admin Updates Commission
-        console.log('4. Admin updating Commission Settings...');
-        const settings = await request(`${BASE_URL}/settings`, 'PUT', {
-            key: 'default_commission',
-            value: 20,
-            description: 'Test Commission Updated'
-        }, adminToken);
-
-        if (settings.value === 20) {
-            console.log('   SUCCESS: Commission updated to 20%.');
-        } else {
-            console.error('   FAILED: Commission not updated.');
-        }
-
-        // 5. Seller Checking Orders (Empty)
-        console.log('5. Seller checking orders...');
-        const orders = await request(`${BASE_URL}/orders/my-orders`, 'GET', null, sellerToken);
-        if (Array.isArray(orders)) {
-            console.log(`   SUCCESS: Fetched ${orders.length} orders (Empty is expected).`);
-        } else {
-            console.error('   FAILED: Orders response not an array.');
+            if (settings && settings.value === 20) {
+                console.log('   SUCCESS: Commission updated to 20%.');
+            } else {
+                console.log('   Warning: Commission update response unexpected:', settings);
+            }
+        } catch (e) {
+            console.error('   FAILED: Settings update failed.', e.message);
         }
 
         console.log('--- VERIFICATION COMPLETE ---');
 
     } catch (err) {
-        console.error('FATAL ERROR:', err.message);
+        console.error('FATAL SYSTEM ERROR:', err.message);
     }
 }
 

@@ -4,14 +4,22 @@ const Product = require('../models/Product'); // Ensure product exists
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
 const router = express.Router();
 
-// Multer Config for Videos
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => cb(null, 'vid_' + Date.now() + path.extname(file.originalname))
-});
-const upload = multer({ storage });
+// Multer Config
+const { videoStorage: cloudVideoStorage } = require('../config/cloudinary');
+let upload;
+
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+    upload = multer({ storage: cloudVideoStorage });
+} else {
+    const storage = multer.diskStorage({
+        destination: (req, file, cb) => cb(null, os.tmpdir()),
+        filename: (req, file, cb) => cb(null, 'vid_' + Date.now() + path.extname(file.originalname))
+    });
+    upload = multer({ storage });
+}
 
 // Admin: Upload Video
 router.post('/upload', auth(['admin']), upload.single('video'), async (req, res) => {
@@ -26,7 +34,9 @@ router.post('/upload', auth(['admin']), upload.single('video'), async (req, res)
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        const videoUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+        const videoUrl = (req.file.path && req.file.path.startsWith('http'))
+            ? req.file.path
+            : `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
         // For simplicity, we are not generating a thumbnail here. 
         // In a real app, use ffmpeg or ask user to upload one.

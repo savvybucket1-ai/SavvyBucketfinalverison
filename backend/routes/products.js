@@ -3,19 +3,30 @@ const Product = require('../models/Product');
 const auth = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
+const os = require('os');
+const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
 
 // Multer Config
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
-});
-const upload = multer({ storage });
+const { storage: cloudStorage } = require('../config/cloudinary');
+let upload;
+
+if (process.env.CLOUDINARY_CLOUD_NAME) {
+    upload = multer({ storage: cloudStorage });
+    console.log('Using Cloudinary Storage for Products');
+} else {
+    const storage = multer.diskStorage({
+        destination: (req, file, cb) => cb(null, os.tmpdir()),
+        filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+    });
+    upload = multer({ storage });
+    console.log('Using Temp Disk Storage for Products (Cloudinary keys missing)');
+}
 
 // Seller: Add product (Multi-image upload)
 router.post('/seller/add', auth(['seller']), upload.array('images', 10), async (req, res) => {
     try {
-        let { title, description, sellerPrice, moq, stock, category, hsnCode, gstPercentage, weight, length, breadth, height, variations, tieredPricing } = req.body;
+        let { title, description, sellerPrice, moq, stock, category, subCategory, hsnCode, gstPercentage, weight, length, breadth, height, variations, tieredPricing } = req.body;
 
         if (typeof variations === 'string') {
             try { variations = JSON.parse(variations); } catch (e) { variations = []; }
@@ -29,12 +40,15 @@ router.post('/seller/add', auth(['seller']), upload.array('images', 10), async (
             return res.status(400).json({ error: 'HSN Code must be at least 6 digits' });
         }
 
-        const imageUrls = req.files.map(file => `http://localhost:5000/uploads/${file.filename}`);
+        const imageUrls = (req.files || []).map(file => {
+            if (file.path && file.path.startsWith('http')) return file.path;
+            const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+            return baseUrl + file.filename;
+        });
 
         const product = new Product({
             title, description, sellerPrice, imageUrls, moq, stock,
-            category, hsnCode, gstPercentage,
-            weight,
+            category, subCategory, hsnCode, gstPercentage, // Added subCategory
             weight,
             dimensions: { length, breadth, height },
             variations,
@@ -49,45 +63,20 @@ router.post('/seller/add', auth(['seller']), upload.array('images', 10), async (
     }
 });
 
-// Seller: View their products
+// Seller: Fetch own products
 router.get('/seller/list', auth(['seller']), async (req, res) => {
     try {
-        const products = await Product.find({ sellerId: req.user.id });
+        console.log('Fetching products for seller ID:', req.user.id);
+        const products = await Product.find({ sellerId: req.user.id }).sort({ createdAt: -1 });
+        console.log(`Found ${products.length} products for seller ${req.user.id}`);
         res.json(products);
     } catch (err) {
+        console.error('Error in /seller/list:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Admin: View pending products
-router.get('/admin/pending', auth(['admin']), async (req, res) => {
-    try {
-        const products = await Product.find({ status: 'pending' }).populate('sellerId', 'name email');
-        res.json(products);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Admin: Approve/Reject/Update Product
-router.patch('/admin/approve/:id', auth(['admin']), async (req, res) => {
-    try {
-        const { adminPrice, commission, status, title, description, moq, category, stock, hsnCode, gstPercentage, variations, tieredPricing, weight, length, breadth, height } = req.body;
-        const updateFields = {
-            adminPrice, commission, status, title, description,
-            moq, category, stock, hsnCode, gstPercentage,
-            variations, tieredPricing, weight,
-            dimensions: { length, breadth, height }
-        };
-
-        const product = await Product.findByIdAndUpdate(req.params.id, updateFields, { new: true });
-        res.json(product);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
-});
-
-// Seller: Toggle Stock Availability and Update Stock
+// Seller: Update stock/availability
 router.patch('/seller/update-stock/:id', auth(['seller']), async (req, res) => {
     try {
         const { isAvailable, stock } = req.body;
@@ -99,14 +88,14 @@ router.patch('/seller/update-stock/:id', auth(['seller']), async (req, res) => {
         if (!product) return res.status(404).json({ message: 'Product not found' });
         res.json(product);
     } catch (err) {
-        res.status(400).json({ error: err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
 // Seller: Update product details
 router.put('/seller/update/:id', auth(['seller']), upload.array('images', 10), async (req, res) => {
     try {
-        let { title, description, sellerPrice, moq, stock, category, hsnCode, gstPercentage, weight, length, breadth, height, variations, tieredPricing } = req.body;
+        let { title, description, sellerPrice, moq, stock, category, subCategory, hsnCode, gstPercentage, weight, length, breadth, height, variations, tieredPricing } = req.body;
 
         if (typeof variations === 'string') {
             try { variations = JSON.parse(variations); } catch (e) { variations = []; }
@@ -122,8 +111,7 @@ router.put('/seller/update/:id', auth(['seller']), upload.array('images', 10), a
 
         const updateData = {
             title, description, sellerPrice, moq, stock,
-            category, hsnCode, gstPercentage,
-            weight,
+            category, subCategory, hsnCode, gstPercentage, // Added subCategory
             weight,
             dimensions: { length, breadth, height },
             variations,
@@ -132,7 +120,11 @@ router.put('/seller/update/:id', auth(['seller']), upload.array('images', 10), a
         };
 
         if (req.files && req.files.length > 0) {
-            const newImageUrls = req.files.map(file => `http://localhost:5000/uploads/${file.filename}`);
+            const newImageUrls = req.files.map(file => {
+                if (file.path && file.path.startsWith('http')) return file.path;
+                const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+                return baseUrl + file.filename;
+            });
             updateData.imageUrls = newImageUrls; // Overwrite or could append, but usually overwrite is simpler for basic update
         }
 
@@ -171,18 +163,49 @@ router.get('/:id', async (req, res) => {
 // Buyer: Fetch approved products with filters
 router.get('/buyer/list', async (req, res) => {
     try {
-        const { category, search } = req.query;
+        const { category, subCategory, search, sort } = req.query;
         let query = { status: 'approved', isAvailable: true };
 
         if (category && category !== 'All Categories') {
             query.category = category;
         }
 
+        if (subCategory) {
+            query.subCategory = subCategory;
+        }
+
         if (search) {
             query.title = { $regex: search, $options: 'i' };
         }
 
-        const products = await Product.find(query).populate('sellerId', 'name');
+        let productsQuery = Product.find(query).populate('sellerId', 'name');
+
+        switch (sort) {
+            case 'price_low':
+                productsQuery = productsQuery.sort({ adminPrice: 1 });
+                break;
+            case 'price_high':
+                productsQuery = productsQuery.sort({ adminPrice: -1 });
+                break;
+            case 'newest':
+                productsQuery = productsQuery.sort({ createdAt: -1 });
+                break;
+            default:
+                // Default sort (e.g. relevance/newest if needed, or no specific sort)
+                break;
+        }
+
+        const products = await productsQuery;
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Buyer: Fetch Trending Products
+router.get('/buyer/trending', async (req, res) => {
+    try {
+        const products = await Product.find({ status: 'approved', isAvailable: true, isTrending: true }).populate('sellerId', 'name');
         res.json(products);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -207,6 +230,129 @@ router.get('/admin/approved', auth(['admin']), async (req, res) => {
 
         const products = await Product.find(query).populate('sellerId', 'name email');
         res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: Toggle Trending Status
+router.patch('/admin/toggle-trending/:id', auth(['admin']), async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: 'Product not found' });
+
+        product.isTrending = !product.isTrending;
+        await product.save();
+        res.json(product);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Buyer: Fetch Latest 20 Approved Products (Just Arrived)
+router.get('/buyer/latest', async (req, res) => {
+    try {
+        const products = await Product.find({ status: 'approved', isAvailable: true })
+            .sort({ createdAt: -1 }) // Sort by newest first
+            .limit(20) // Limit to 20 products
+            .populate('sellerId', 'name');
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// Admin: Fetch all pending products
+// Admin: Fetch all pending products
+router.get('/admin/pending', auth(['admin']), async (req, res) => {
+    try {
+        const products = await Product.find({ status: 'pending' }).populate('sellerId', 'name email');
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: Approve/Reject Product
+router.patch('/admin/approve/:id', auth(['admin']), async (req, res) => {
+    try {
+        let { status, adminPrice, commission, title, description, category, moq, hsnCode, gstPercentage, stock, tieredPricing, variations, imageUrls } = req.body;
+
+        const updateData = { status };
+
+        if (status === 'approved') {
+            updateData.adminPrice = Number(adminPrice) || 0;
+            updateData.commission = Number(commission) || 0;
+            updateData.title = title;
+            updateData.description = description;
+            updateData.category = category;
+            updateData.moq = Number(moq) || 1;
+            updateData.hsnCode = String(hsnCode);
+            updateData.gstPercentage = Number(gstPercentage) || 0;
+            updateData.stock = Number(stock) || 0;
+            updateData.isAvailable = true;
+
+            if (variations) updateData.variations = variations;
+            if (imageUrls) updateData.imageUrls = imageUrls;
+
+            if (tieredPricing && tieredPricing.length > 0) {
+                updateData.tieredPricing = tieredPricing.map(t => ({
+                    ...t,
+                    moq: Number(t.moq) || 0,
+                    price: Number(t.price) || 0,
+                    length: Number(t.length) || 0,
+                    breadth: Number(t.breadth || t.width) || 0,
+                    height: Number(t.height) || 0,
+                    weight: Number(t.weight) || 0
+                }));
+
+                // Automatically update top-level dimensions from the first tier (Base Unit)
+                // Ensure we pick the smallest MOQ tier as base
+                const baseTier = [...updateData.tieredPricing].sort((a, b) => a.moq - b.moq)[0];
+                if (baseTier) {
+                    if (baseTier.weight) updateData.weight = baseTier.weight;
+                    updateData.dimensions = {
+                        length: baseTier.length,
+                        breadth: baseTier.breadth,
+                        height: baseTier.height
+                    };
+                }
+            }
+        }
+
+        const product = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('sellerId');
+
+        if (!product) return res.status(404).json({ message: 'Product not found' });
+
+        // Send Email Notification
+        if (product.sellerId && product.sellerId.email) {
+            const subject = `Product ${status === 'approved' ? 'Approved' : 'Rejected'} - SavvyBucket`;
+            const message = `Hello ${product.sellerId.name},\n\nYour product "${product.title}" has been ${status} by the admin.\n\n${status === 'approved' ? 'It is now live on the marketplace.' : 'Please check the dashboard for details or contact support.'}\n\nRegards,\nSavvyBucket Team`;
+
+            // Fire and forget email to not block response
+            sendEmail({
+                email: product.sellerId.email,
+                subject,
+                message,
+                html: `<div style="font-family: sans-serif; padding: 20px;"><h2>Product ${status === 'approved' ? '<span style="color:green">Approved</span>' : '<span style="color:red">Rejected</span>'}</h2><p>Hello <b>${product.sellerId.name}</b>,</p><p>Your product <b>${product.title}</b> has been ${status}.</p><p>${status === 'approved' ? 'It is now live on the marketplace.' : 'Please check your seller dashboard for more details.'}</p></div>`
+            }).catch(e => console.error('Failed to send product approval email', e));
+        }
+        res.json(product);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: Toggle Trending Status
+router.patch('/admin/toggle-trending/:id', auth(['admin']), async (req, res) => {
+    try {
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: 'Product not found' });
+
+        product.isTrending = !product.isTrending;
+        await product.save();
+        res.json(product);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

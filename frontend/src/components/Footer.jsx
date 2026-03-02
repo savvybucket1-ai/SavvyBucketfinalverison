@@ -35,14 +35,18 @@ const Footer = () => {
                     <div>
                         <h4 className="text-white font-black uppercase text-xs tracking-widest mb-8">Quick Links</h4>
                         <ul className="space-y-4">
-                            {['Just Arrived', 'Bulk Inquiries'].map((item, idx) => (
-                                <li key={idx}>
-                                    <a href="#" className="text-sm font-bold hover:text-primary transition-colors flex items-center group">
-                                        <ArrowRight size={14} className="mr-2 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
-                                        {item}
-                                    </a>
-                                </li>
-                            ))}
+                            <li>
+                                <Link to="/just-arrived" className="text-sm font-bold hover:text-primary transition-colors flex items-center group">
+                                    <ArrowRight size={14} className="mr-2 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                                    Just Arrived
+                                </Link>
+                            </li>
+                            <li>
+                                <a href="#" className="text-sm font-bold hover:text-primary transition-colors flex items-center group">
+                                    <ArrowRight size={14} className="mr-2 opacity-0 -ml-4 group-hover:opacity-100 group-hover:ml-0 transition-all" />
+                                    Bulk Inquiries
+                                </a>
+                            </li>
                         </ul>
                     </div>
 

@@ -195,6 +195,8 @@ const Cart = () => {
                                     alert('Session expired or invalid token. Please log in again.');
                                     localStorage.removeItem('user');
                                     navigate('/login');
+                                } else if (err.message === 'Network Error') {
+                                    alert(`Checkout failed: Network Error.\n1. Check your internet.\n2. URL: ${API_BASE_URL}/api/orders/create-easebuzz-session\nIf you use VPN, please disable it.`);
                                 } else {
                                     alert('Checkout failed: ' + (err.response?.data?.message || err.message));
                                 }

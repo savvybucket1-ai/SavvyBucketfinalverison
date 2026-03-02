@@ -451,57 +451,59 @@ const SellerDashboard = () => {
                                         <span>Add New</span>
                                     </button>
                                 </div>
-                                <table className="w-full text-left">
-                                    <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
-                                        <tr>
-                                            <th className="px-6 py-4">Product</th>
-                                            <th className="px-6 py-4 text-center">Seller Price</th>
-                                            <th className="px-6 py-4 text-center">MOQ</th>
-                                            <th className="px-6 py-4 text-center">Stock</th>
-
-                                            <th className="px-6 py-4 text-center">Approval</th>
-                                            <th className="px-6 py-4 text-center">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50 text-sm">
-                                        {products.length > 0 ? products.map(p => (
-                                            <tr key={p._id} className="hover:bg-slate-50 transition">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
-                                                            <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-slate-700">{p.title}</span>
-                                                            <span className="text-[10px] text-slate-400 font-bold uppercase">{p.isAvailable ? 'Serviceable' : 'Out of Stock'}</span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center font-bold text-slate-500">₹{p.sellerPrice || 0}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
-                                                <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
-
-                                                <td className="px-6 py-4 text-center">
-                                                    {p.status === 'pending' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-orange-600 bg-orange-50">Pending</span>}
-                                                    {p.status === 'approved' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-green-600 bg-green-50">Approved</span>}
-                                                    {p.status === 'rejected' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-red-600 bg-red-50">Rejected</span>}
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <button
-                                                        onClick={() => handleUpdateStock(p._id, p.isAvailable, p.stock)}
-                                                        className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition shadow-sm border ${p.isAvailable ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
-                                                    >
-                                                        {p.isAvailable ? 'Out of Stock' : 'In Stock'}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        )) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left min-w-[700px]">
+                                        <thead className="bg-[#f8fafc] text-[10px] font-black uppercase text-slate-400 border-b border-slate-100">
                                             <tr>
-                                                <td colSpan="4" className="px-6 py-12 text-center text-slate-400 font-bold italic">No products listed yet.</td>
+                                                <th className="px-6 py-4">Product</th>
+                                                <th className="px-6 py-4 text-center">Seller Price</th>
+                                                <th className="px-6 py-4 text-center">MOQ</th>
+                                                <th className="px-6 py-4 text-center">Stock</th>
+
+                                                <th className="px-6 py-4 text-center">Approval</th>
+                                                <th className="px-6 py-4 text-center">Action</th>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50 text-sm">
+                                            {products.length > 0 ? products.map(p => (
+                                                <tr key={p._id} className="hover:bg-slate-50 transition">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-slate-100 flex-shrink-0 flex items-center justify-center p-1 overflow-hidden">
+                                                                <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/40'} alt="" className="object-contain" />
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-slate-700">{p.title}</span>
+                                                                <span className="text-[10px] text-slate-400 font-bold uppercase">{p.isAvailable ? 'Serviceable' : 'Out of Stock'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center font-bold text-slate-500">₹{p.sellerPrice || 0}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
+
+                                                    <td className="px-6 py-4 text-center">
+                                                        {p.status === 'pending' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-orange-600 bg-orange-50">Pending</span>}
+                                                        {p.status === 'approved' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-green-600 bg-green-50">Approved</span>}
+                                                        {p.status === 'rejected' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-red-600 bg-red-50">Rejected</span>}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <button
+                                                            onClick={() => handleUpdateStock(p._id, p.isAvailable, p.stock)}
+                                                            className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition shadow-sm border ${p.isAvailable ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
+                                                        >
+                                                            {p.isAvailable ? 'Out of Stock' : 'In Stock'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )) : (
+                                                <tr>
+                                                    <td colSpan="4" className="px-6 py-12 text-center text-slate-400 font-bold italic">No products listed yet.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         } />
                         <Route path="/orders" element={
@@ -531,121 +533,125 @@ const SellerDashboard = () => {
                                     </div>
                                 </div>
 
-                                {/* Table Header */}
-                                <div className="grid grid-cols-10 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400">
-                                    <div className="col-span-2">Order Details</div>
+                                <div className="flex-1 overflow-auto">
+                                    <div className="min-w-[800px]">
+                                        {/* Table Header */}
+                                        <div className="grid grid-cols-10 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400">
+                                            <div className="col-span-2">Order Details</div>
 
-                                    <div className="col-span-3">Product Details</div>
-                                    <div className="col-span-1">Payment</div>
-                                    <div className="col-span-2">Status</div>
-                                    <div className="col-span-2 text-right">Action</div>
-                                </div>
+                                            <div className="col-span-3">Product Details</div>
+                                            <div className="col-span-1">Payment</div>
+                                            <div className="col-span-2">Status</div>
+                                            <div className="col-span-2 text-right">Action</div>
+                                        </div>
 
-                                {/* Scrollable Table Body */}
-                                <div className="flex-1 overflow-y-auto">
-                                    {getFilteredOrders().length > 0 ? getFilteredOrders().map(order => (
-                                        <div key={order._id} className="grid grid-cols-10 gap-4 px-6 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center text-xs">
-                                            {/* Order Details */}
-                                            <div className="col-span-2">
-                                                <div className="font-bold text-primary cursor-pointer hover:underline">#{order._id.slice(-6)}</div>
-                                                <div className="text-[10px] text-slate-400 font-bold mt-1">
-                                                    {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                </div>
-                                                <div className="text-[10px] text-slate-400 font-semibold">
-                                                    {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                </div>
-                                            </div>
-
-
-
-                                            {/* Product Details */}
-                                            <div className="col-span-3 flex items-start gap-3">
-                                                <div className="w-12 h-12 flex-shrink-0 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden">
-                                                    <img
-                                                        src={order.productId?.imageUrls?.[0] || 'https://via.placeholder.com/48'}
-                                                        alt={order.productId?.title}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="font-bold text-slate-700 truncate" title={order.productId?.title}>{order.productId?.title || 'Unknown Product'}</div>
-                                                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                                                        <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">Qty: {order.quantity}</span>
-                                                        {order.productId?.sku && <span className="text-[10px] text-slate-400 font-mono">SKU: {order.productId.sku}</span>}
+                                        {/* Scrollable Table Body */}
+                                        <div>
+                                            {getFilteredOrders().length > 0 ? getFilteredOrders().map(order => (
+                                                <div key={order._id} className="grid grid-cols-10 gap-4 px-6 py-4 border-b border-slate-50 hover:bg-slate-50 transition items-center text-xs">
+                                                    {/* Order Details */}
+                                                    <div className="col-span-2">
+                                                        <div className="font-bold text-primary cursor-pointer hover:underline">#{order._id.slice(-6)}</div>
+                                                        <div className="text-[10px] text-slate-400 font-bold mt-1">
+                                                            {new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-400 font-semibold">
+                                                            {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
                                                     </div>
-                                                    <div className="mt-1">
-                                                        {order.selectedVariation && Object.keys(order.selectedVariation).length > 0 ? (
-                                                            <span className="text-[10px] font-bold bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded text-slate-600 inline-block">
-                                                                {Object.entries(order.selectedVariation).map(([key, val]) => `${key}: ${val}`).join(' | ')}
-                                                            </span>
+
+
+
+                                                    {/* Product Details */}
+                                                    <div className="col-span-3 flex items-start gap-3">
+                                                        <div className="w-12 h-12 flex-shrink-0 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden">
+                                                            <img
+                                                                src={order.productId?.imageUrls?.[0] || 'https://via.placeholder.com/48'}
+                                                                alt={order.productId?.title}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-bold text-slate-700 truncate" title={order.productId?.title}>{order.productId?.title || 'Unknown Product'}</div>
+                                                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                                <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">Qty: {order.quantity}</span>
+                                                                {order.productId?.sku && <span className="text-[10px] text-slate-400 font-mono">SKU: {order.productId.sku}</span>}
+                                                            </div>
+                                                            <div className="mt-1">
+                                                                {order.selectedVariation && Object.keys(order.selectedVariation).length > 0 ? (
+                                                                    <span className="text-[10px] font-bold bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded text-slate-600 inline-block">
+                                                                        {Object.entries(order.selectedVariation).map(([key, val]) => `${key}: ${val}`).join(' | ')}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[10px] font-bold text-slate-300">Variation: N/A</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Payment */}
+                                                    <div className="col-span-1">
+                                                        <div className="font-black text-slate-800">₹{order.sellerEarning}</div>
+                                                        <div className="text-[9px] font-bold uppercase text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block mt-1">Prepaid</div>
+                                                    </div>
+
+                                                    {/* Status */}
+                                                    <div className="col-span-2">
+                                                        <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-md inline-flex items-center gap-1 border ${order.logisticsStatus === 'pending' ? 'bg-orange-50 text-orange-600 border-orange-100' :
+                                                            order.logisticsStatus === 'ready-to-ship' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                                                                order.logisticsStatus === 'awb-assigned' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                                                    order.logisticsStatus === 'pickup-scheduled' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
+                                                                        order.logisticsStatus === 'in-transit' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                                                            order.logisticsStatus === 'delivered' ? 'bg-green-50 text-green-600 border-green-100' :
+                                                                                ['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) ? 'bg-red-50 text-red-600 border-red-100' :
+                                                                                    'bg-slate-50 text-slate-600 border-slate-100'
+                                                            }`}>
+                                                            {order.logisticsStatus === 'pending' && <Clock size={10} />}
+                                                            {order.logisticsStatus === 'ready-to-ship' && <Package size={10} />}
+                                                            {order.logisticsStatus === 'awb-assigned' && <FileText size={10} />}
+                                                            {order.logisticsStatus === 'pickup-scheduled' && <Truck size={10} />}
+                                                            {order.logisticsStatus === 'in-transit' && <Truck size={10} />}
+                                                            {order.logisticsStatus === 'delivered' && <CheckCircle size={10} />}
+                                                            {['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) && <XCircle size={10} />}
+                                                            <span>{order.logisticsStatus.replace(/-/g, ' ')}</span>
+                                                        </div>
+                                                        {['awb-assigned', 'pickup-scheduled'].includes(order.logisticsStatus) &&
+                                                            <div className="text-[9px] text-slate-400 mt-1 font-semibold pl-1">Waiting for Courier</div>
+                                                        }
+                                                    </div>
+
+                                                    {/* Action */}
+                                                    <div className="col-span-2 text-right">
+                                                        {['pending', 'ready-to-ship', 'awb-assigned', 'pickup-scheduled', 'manifest-generated'].includes(order.logisticsStatus) ? (
+                                                            <button
+                                                                onClick={() => setManagedOrder(order._id)}
+                                                                className="bg-primary text-white pl-3 pr-4 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center justify-center gap-1 ml-auto"
+                                                            >
+                                                                {['awb-assigned', 'pickup-scheduled', 'manifest-generated'].includes(order.logisticsStatus) ? (
+                                                                    <>
+                                                                        <Download size={12} /> Download
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Truck size={12} /> Ship Now
+                                                                    </>
+                                                                )}
+                                                            </button>
                                                         ) : (
-                                                            <span className="text-[10px] font-bold text-slate-300">Variation: N/A</span>
+                                                            <button className="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase cursor-not-allowed ml-auto">
+                                                                Track
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
-                                            </div>
-
-                                            {/* Payment */}
-                                            <div className="col-span-1">
-                                                <div className="font-black text-slate-800">₹{order.sellerEarning}</div>
-                                                <div className="text-[9px] font-bold uppercase text-green-600 bg-green-50 px-1.5 py-0.5 rounded inline-block mt-1">Prepaid</div>
-                                            </div>
-
-                                            {/* Status */}
-                                            <div className="col-span-2">
-                                                <div className={`text-[9px] font-black uppercase px-2 py-1 rounded-md inline-flex items-center gap-1 border ${order.logisticsStatus === 'pending' ? 'bg-orange-50 text-orange-600 border-orange-100' :
-                                                    order.logisticsStatus === 'ready-to-ship' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                                        order.logisticsStatus === 'awb-assigned' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                            order.logisticsStatus === 'pickup-scheduled' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' :
-                                                                order.logisticsStatus === 'in-transit' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                                                                    order.logisticsStatus === 'delivered' ? 'bg-green-50 text-green-600 border-green-100' :
-                                                                        ['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) ? 'bg-red-50 text-red-600 border-red-100' :
-                                                                            'bg-slate-50 text-slate-600 border-slate-100'
-                                                    }`}>
-                                                    {order.logisticsStatus === 'pending' && <Clock size={10} />}
-                                                    {order.logisticsStatus === 'ready-to-ship' && <Package size={10} />}
-                                                    {order.logisticsStatus === 'awb-assigned' && <FileText size={10} />}
-                                                    {order.logisticsStatus === 'pickup-scheduled' && <Truck size={10} />}
-                                                    {order.logisticsStatus === 'in-transit' && <Truck size={10} />}
-                                                    {order.logisticsStatus === 'delivered' && <CheckCircle size={10} />}
-                                                    {['cancelled', 'canceled', 'rto'].includes(order.logisticsStatus) && <XCircle size={10} />}
-                                                    <span>{order.logisticsStatus.replace(/-/g, ' ')}</span>
+                                            )) : (
+                                                <div className="flex flex-col items-center justify-center h-64 text-slate-400">
+                                                    <Package size={48} className="opacity-20 mb-4" />
+                                                    <div className="font-bold text-sm">No orders found in '{activeTab}'</div>
                                                 </div>
-                                                {['awb-assigned', 'pickup-scheduled'].includes(order.logisticsStatus) &&
-                                                    <div className="text-[9px] text-slate-400 mt-1 font-semibold pl-1">Waiting for Courier</div>
-                                                }
-                                            </div>
-
-                                            {/* Action */}
-                                            <div className="col-span-2 text-right">
-                                                {['pending', 'ready-to-ship', 'awb-assigned', 'pickup-scheduled', 'manifest-generated'].includes(order.logisticsStatus) ? (
-                                                    <button
-                                                        onClick={() => setManagedOrder(order._id)}
-                                                        className="bg-primary text-white pl-3 pr-4 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center justify-center gap-1 ml-auto"
-                                                    >
-                                                        {['awb-assigned', 'pickup-scheduled', 'manifest-generated'].includes(order.logisticsStatus) ? (
-                                                            <>
-                                                                <Download size={12} /> Download
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <Truck size={12} /> Ship Now
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                ) : (
-                                                    <button className="bg-slate-100 text-slate-400 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase cursor-not-allowed ml-auto">
-                                                        Track
-                                                    </button>
-                                                )}
-                                            </div>
+                                            )}
                                         </div>
-                                    )) : (
-                                        <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                                            <Package size={48} className="opacity-20 mb-4" />
-                                            <div className="font-bold text-sm">No orders found in '{activeTab}'</div>
-                                        </div>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
                         } />

@@ -21,7 +21,7 @@ const Success = () => {
                     <div className="bg-green-100 rounded-full p-4">
                         <CheckCircle className="w-16 h-16 text-green-600" />
                     </div>
-                </div>
+                </div> 
 
                 <h1 className="text-3xl font-bold text-gray-900 mb-4">
                     Payment Successful!

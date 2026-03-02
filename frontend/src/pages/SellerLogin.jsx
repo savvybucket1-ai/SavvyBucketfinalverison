@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 
 const SellerLogin = () => {
     const [email, setEmail] = useState('');
@@ -10,12 +11,12 @@ const SellerLogin = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.post('http://localhost:5000/api/auth/login', { email, password });
+            const res = await axios.post(`${API_BASE_URL}/api/auth/login`, { email, password, role: 'seller' });
             // Store user with token inside for getAuthHeader() compatibility
             localStorage.setItem('user', JSON.stringify({ ...res.data.user, token: res.data.token }));
             navigate('/seller');
         } catch (err) {
-            alert('Login failed');
+            alert(err.response?.data?.message || 'Login failed');
         }
     };
 
@@ -29,15 +30,20 @@ const SellerLogin = () => {
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Work Email</label>
-                        <input type="email" required className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:border-primary font-bold text-slate-700 transition-all placeholder:text-slate-300"
-                            placeholder="business@example.com"
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Work Email or Phone</label>
+                        <input type="text" required className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:border-primary font-bold text-slate-700 transition-all placeholder:text-slate-300"
+                            placeholder="business@example.com or 999..."
                             value={email} onChange={(e) => setEmail(e.target.value)} />
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Password</label>
                         <input type="password" required className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:border-primary font-bold text-slate-700 transition-all"
                             value={password} onChange={(e) => setPassword(e.target.value)} />
+                    </div>
+                    <div className="flex justify-end">
+                        <Link to="/forgot-password?role=seller" className="text-xs font-bold text-primary hover:underline">
+                            Forgot Password?
+                        </Link>
                     </div>
                     <button type="submit" className="w-full bg-primary text-white py-5 rounded-2xl font-black shadow-xl shadow-blue-500/30 hover:bg-blue-600 hover:-translate-y-1 transition-all uppercase tracking-widest text-xs">
                         Enter Dashboard

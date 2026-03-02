@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ChevronLeft, ChevronRight, Star, Truck, Heart, Minus, Plus, ShieldCheck, Lock, BadgePercent, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Star, Truck, Minus, Plus, ShieldCheck, Lock, BadgePercent, ChevronDown } from 'lucide-react';
 import { getCurrentUser } from '../utils/auth';
+import ReviewSection from '../components/ReviewSection';
+import API_BASE_URL from '../config';
 
 const ProductDetail = () => {
     const { id } = useParams();
@@ -10,30 +12,60 @@ const ProductDetail = () => {
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState(0);
-    const [quantity, setQuantity] = useState(1);
+    const [multiplier, setMultiplier] = useState(1); // Multiplier for quantity (1, 2, 3, 4...)
     const [activeTab, setActiveTab] = useState('description');
-    const [pincode, setPincode] = useState('');
     const [selectedOptions, setSelectedOptions] = useState({});
-    const [shippingInfo, setShippingInfo] = useState(null);
-    const [stepQuantity, setStepQuantity] = useState(1);
+
+    const [selectedMoq, setSelectedMoq] = useState(1); // Selected MOQ from dropdown
     const [showQtyDropdown, setShowQtyDropdown] = useState(false);
     const user = getCurrentUser();
 
     useEffect(() => {
-        axios.get(`http://localhost:5000/api/products/${id}`)
+        const COMMON_COLORS = ['blue', 'green', 'red', 'yellow', 'black', 'white', 'orange', 'purple', 'pink', 'grey', 'gray', 'brown', 'gold', 'silver', 'beige', 'maroon', 'navy', 'teal', 'cream', 'mustard', 'olive', 'coral', 'lavender'];
+
+        axios.get(`${API_BASE_URL}/api/products/${id}`)
             .then(res => {
-                setProduct(res.data);
-                const initialMoq = res.data.moq || 1;
-                setQuantity(initialMoq);
-                setStepQuantity(initialMoq);
+                // Normalize Data: Merge split color variations (e.g. Name="Blue", Name="Green") into one "Color" variation
+                const productData = res.data;
+                if (productData.variations?.length > 1) {
+                    const colorVars = productData.variations.filter(v => COMMON_COLORS.includes(v.name.toLowerCase()));
+                    const otherVars = productData.variations.filter(v => !COMMON_COLORS.includes(v.name.toLowerCase()));
+
+                    if (colorVars.length > 1) {
+                        const mergedColorVar = {
+                            name: 'Color',
+                            values: colorVars.map(v => v.name)
+                        };
+                        // Place Color first, then others
+                        productData.variations = [mergedColorVar, ...otherVars];
+                    }
+                }
+
+                setProduct(productData);
+                const initialMoq = productData.moq || 1;
+                setSelectedMoq(initialMoq);
+                setMultiplier(1);
 
                 // Initialize default variations
-                if (res.data.variations?.length > 0) {
+                if (productData.variations?.length > 0) {
                     const defaults = {};
-                    res.data.variations.forEach(v => {
+                    productData.variations.forEach(v => {
                         if (v.values?.length > 0) defaults[v.name] = v.values[0];
                     });
                     setSelectedOptions(defaults);
+                }
+
+                // Fetch Related Products (Same Category)
+                if (productData.category) {
+                    axios.get(`${API_BASE_URL}/api/products/buyer/list?category=${encodeURIComponent(productData.category)}`)
+                        .then(relRes => {
+                            // Filter current product and take top 4
+                            const related = relRes.data
+                                .filter(p => p._id !== productData._id)
+                                .slice(0, 4);
+                            setRelatedProducts(related);
+                        })
+                        .catch(err => console.error("Error fetching related products:", err));
                 }
 
                 setLoading(false);
@@ -44,12 +76,10 @@ const ProductDetail = () => {
             });
     }, [id]);
 
-    const handleQuantityChange = (delta) => {
-        const newQty = quantity + delta;
-        if (newQty >= (product?.moq || 1)) {
-            setQuantity(newQty);
-        }
-    };
+    const [relatedProducts, setRelatedProducts] = useState([]);
+
+    // Computed actual quantity = MOQ × multiplier
+    const quantity = selectedMoq * multiplier;
 
 
 
@@ -76,26 +106,25 @@ const ProductDetail = () => {
         ...(product.tieredPricing || []).map(t => t.moq)
     ].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b) : [];
 
-    const handleCheckShipping = () => {
-        if (pincode.length === 6) {
-            // Simulate shipping check
-            setShippingInfo({
-                available: true,
-                cost: 45,
-                courier: 'Delhivery Courier',
-                days: '3-5 Days'
-            });
-        }
-    };
+
 
     const handleAddToCart = () => {
         const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
-        const existingItem = existingCart.find(item => item._id === product._id);
+        // Check for same product AND same variation
+        const existingItemIndex = existingCart.findIndex(item =>
+            item._id === product._id &&
+            JSON.stringify(item.selectedVariation || {}) === JSON.stringify(selectedOptions || {})
+        );
 
-        if (existingItem) {
-            existingItem.quantity += quantity;
+        if (existingItemIndex > -1) {
+            existingCart[existingItemIndex].quantity += quantity;
         } else {
-            existingCart.push({ ...product, quantity });
+            existingCart.push({
+                ...product,
+                quantity,
+                selectedVariation: selectedOptions,
+                cartItemId: Date.now() + Math.random().toString(36).substr(2, 9)
+            });
         }
 
         localStorage.setItem('cart', JSON.stringify(existingCart));
@@ -104,6 +133,31 @@ const ProductDetail = () => {
         window.dispatchEvent(new Event('cartUpdated'));
 
         alert(`Added ${quantity} x ${product.title} to cart!`);
+    };
+
+    // ...
+
+    const handleBuyNow = () => {
+        const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
+        const existingItemIndex = existingCart.findIndex(item =>
+            item._id === product._id &&
+            JSON.stringify(item.selectedVariation || {}) === JSON.stringify(selectedOptions || {})
+        );
+
+        if (existingItemIndex > -1) {
+            existingCart[existingItemIndex].quantity += quantity;
+        } else {
+            existingCart.push({
+                ...product,
+                quantity,
+                selectedVariation: selectedOptions,
+                cartItemId: Date.now() + Math.random().toString(36).substr(2, 9)
+            });
+        }
+
+        localStorage.setItem('cart', JSON.stringify(existingCart));
+        window.dispatchEvent(new Event('cartUpdated'));
+        navigate('/cart');
     };
 
 
@@ -131,7 +185,7 @@ const ProductDetail = () => {
         <div className="min-h-screen bg-slate-50">
             <div className="max-w-[1440px] mx-auto px-6 py-6">
                 {/* Breadcrumb */}
-                <div className="flex items-center gap-2 text-sm mb-6">
+                <div className="flex flex-wrap items-center gap-2 text-sm mb-6">
                     <Link to="/" className="text-slate-500 hover:text-primary flex items-center gap-1">
                         <ChevronLeft size={16} />
                         Home
@@ -197,14 +251,12 @@ const ProductDetail = () => {
                                     <Star
                                         key={star}
                                         size={16}
-                                        className={star <= 4 ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}
+                                        className={star <= (product.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}
                                     />
                                 ))}
                             </div>
-                            <span className="text-sm text-slate-500">(675 Reviews)</span>
-                            <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-red-500">
-                                <Heart size={16} /> Wishlist
-                            </button>
+                            <span className="text-sm text-slate-500">({product.reviewsCount || 0} Reviews)</span>
+
                         </div>
 
                         {/* Variations Selections */}
@@ -251,14 +303,47 @@ const ProductDetail = () => {
                         </div>
 
                         {/* Quantity Selector with MOQ Dropdown */}
-                        <div className="flex items-center gap-4 mb-6 relative">
-                            <div className="flex items-center gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6 relative">
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* MOQ Dropdown - Shows actual quantity (12, 24, 36...) */}
+                                <div className="bg-slate-100 px-4 h-12 rounded-xl flex items-center justify-center">
+                                    <span className="text-xl font-black text-slate-800">{quantity}</span>
+                                </div>
+
+                                {/* Multiplier Counter (+/- buttons showing 1, 2, 3, 4...) */}
+                                <div className="flex items-center h-12 bg-primary/5 rounded-xl border-2 border-primary/20 overflow-hidden">
+                                    <button
+                                        onClick={() => {
+                                            if (multiplier > 1) {
+                                                setMultiplier(multiplier - 1);
+                                            }
+                                        }}
+                                        disabled={multiplier <= 1}
+                                        className="w-10 h-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                                    >
+                                        <Minus size={16} />
+                                    </button>
+                                    <span className="min-w-[40px] px-2 text-center font-black text-primary">
+                                        {multiplier}
+                                    </span>
+                                    <button
+                                        onClick={() => {
+                                            setMultiplier(multiplier + 1);
+                                        }}
+                                        className="w-10 h-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+
+                                {/* MOQ Dropdown Selector */}
                                 <div className="relative">
                                     <button
                                         onClick={() => setShowQtyDropdown(!showQtyDropdown)}
-                                        className="min-w-[100px] h-12 px-4 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-between hover:border-primary transition-colors cursor-pointer"
+                                        className="min-w-[80px] h-12 px-3 bg-white border-2 border-slate-200 rounded-xl flex items-center justify-between gap-2 hover:border-primary transition-colors cursor-pointer"
                                     >
-                                        <span className="text-xl font-bold text-slate-800">{stepQuantity}</span>
+                                        <span className="text-sm font-bold text-slate-600">MOQ</span>
+                                        <span className="text-lg font-bold text-slate-800">{selectedMoq}</span>
                                         <ChevronDown className={`w-4 h-4 transition-transform ${showQtyDropdown ? 'rotate-180' : ''}`} />
                                     </button>
 
@@ -268,11 +353,11 @@ const ProductDetail = () => {
                                                 <button
                                                     key={qty}
                                                     onClick={() => {
-                                                        setStepQuantity(qty);
-                                                        setQuantity(qty);
+                                                        setSelectedMoq(qty);
+                                                        setMultiplier(1); // Reset multiplier when MOQ changes
                                                         setShowQtyDropdown(false);
                                                     }}
-                                                    className={`w-full px-4 py-3 text-left font-bold text-sm hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${stepQuantity === qty ? 'bg-primary/5 text-primary' : 'text-slate-700'
+                                                    className={`w-full px-4 py-3 text-left font-bold text-sm hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${selectedMoq === qty ? 'bg-primary/5 text-primary' : 'text-slate-700'
                                                         }`}
                                                 >
                                                     {qty}
@@ -281,34 +366,9 @@ const ProductDetail = () => {
                                         </div>
                                     )}
                                 </div>
-
-                                <div className="flex items-center h-12 bg-primary/5 rounded-xl border-2 border-primary/20 overflow-hidden">
-                                    <button
-                                        onClick={() => {
-                                            if (quantity > stepQuantity) {
-                                                setQuantity(quantity - stepQuantity);
-                                            }
-                                        }}
-                                        disabled={quantity <= stepQuantity}
-                                        className="w-10 h-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
-                                    >
-                                        <Minus size={16} />
-                                    </button>
-                                    <span className="min-w-[40px] px-2 text-center font-black text-primary">
-                                        {quantity}
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            setQuantity(quantity + stepQuantity);
-                                        }}
-                                        className="w-10 h-full flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
-                                    >
-                                        <Plus size={16} />
-                                    </button>
-                                </div>
                             </div>
-                            <span className="text-base font-medium text-slate-600">
-                                Minimum Order Quantity- {product.moq}
+                            <span className="text-sm font-medium text-slate-500">
+                                MOQ: {product.moq} | Total: <span className="font-bold text-primary">{quantity} units</span>
                             </span>
                         </div>
 
@@ -349,65 +409,114 @@ const ProductDetail = () => {
                             {activeTab === 'description' ? (
                                 <p>{product.description}</p>
                             ) : (
-                                <div className="space-y-2">
-                                    <p><strong>HSN Code:</strong> {product.hsnCode}</p>
-                                    <p><strong>GST:</strong> {product.gstPercentage}%</p>
-                                    <p><strong>Stock Available:</strong> {product.stock} units</p>
-                                    <p><strong>Category:</strong> {product.category}</p>
-                                    {product.weight && <p><strong>Weight:</strong> {product.weight} kg</p>}
-                                    {product.dimensions && (
-                                        <p><strong>Dimensions (L×B×H):</strong> {product.dimensions.length} × {product.dimensions.breadth} × {product.dimensions.height} cm</p>
-                                    )}
+                                <div className="space-y-3 mt-4">
+                                    {(() => {
+                                        // Helper to get specs based on quantity tier
+                                        const getSpecsForQuantity = (qty) => {
+                                            let w = product.weight;
+                                            let d = product.dimensions;
+
+                                            if (product.tieredPricing && product.tieredPricing.length > 0) {
+                                                const sortedTiers = [...product.tieredPricing].sort((a, b) => b.moq - a.moq);
+                                                const peer = sortedTiers.find(tier => qty >= tier.moq);
+                                                if (peer) {
+                                                    if (peer.weight) w = peer.weight;
+                                                    if (peer.length || peer.breadth || peer.height) {
+                                                        d = {
+                                                            length: peer.length || d?.length,
+                                                            breadth: peer.breadth || d?.breadth,
+                                                            height: peer.height || d?.height
+                                                        };
+                                                    }
+                                                }
+                                            }
+                                            return { weight: w, dimensions: d };
+                                        };
+
+                                        const currentSpecs = getSpecsForQuantity(quantity);
+
+                                        return (
+                                            <>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                                                    <div>
+                                                        <p className="text-slate-500 font-medium text-xs uppercase tracking-wider mb-1">HSN Code</p>
+                                                        <p className="font-bold text-slate-800">{product.hsnCode || 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-slate-500 font-medium text-xs uppercase tracking-wider mb-1">GST Rate</p>
+                                                        <p className="font-bold text-slate-800">{product.gstPercentage}%</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-slate-500 font-medium text-xs uppercase tracking-wider mb-1">Stock Status</p>
+                                                        <p className="font-bold text-slate-800">{product.stock > 0 ? `${product.stock} units` : 'Out of Stock'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-slate-500 font-medium text-xs uppercase tracking-wider mb-1">Category</p>
+                                                        <p className="font-bold text-slate-800">{product.category}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-slate-500 font-medium text-xs uppercase tracking-wider mb-1">
+                                                            {product.tieredPricing && product.tieredPricing.length > 0 ? `Box Weight (for ${selectedMoq} units)` : 'Unit Weight'}
+                                                        </p>
+                                                        <p className="font-bold text-slate-800">{currentSpecs.weight ? `${currentSpecs.weight} kg` : 'N/A'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-slate-500 font-medium text-xs uppercase tracking-wider mb-1">
+                                                            {product.tieredPricing && product.tieredPricing.length > 0 ? `Box Dims (for ${selectedMoq} units)` : 'Dimensions (L x B x H)'}
+                                                        </p>
+                                                        <p className="font-bold text-slate-800">
+                                                            {currentSpecs.dimensions && (currentSpecs.dimensions.length || currentSpecs.dimensions.breadth || currentSpecs.dimensions.height)
+                                                                ? `${currentSpecs.dimensions.length || 0} x ${currentSpecs.dimensions.breadth || 0} x ${currentSpecs.dimensions.height || 0} cm`
+                                                                : 'N/A'
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Dynamic Calculations based on MOQ */}
+                                                <div className="bg-slate-50 rounded-xl p-4 mt-4 border border-slate-100">
+                                                    <h4 className="text-sm font-black text-slate-700 mb-2 border-b border-slate-200 pb-2">ORDER SPECIFICATIONS (For {quantity} units)</h4>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <p className="text-slate-500 text-xs font-semibold">Total Weight</p>
+                                                            <p className="text-primary font-black text-lg">
+                                                                {currentSpecs.weight ? `${(parseFloat(currentSpecs.weight) * multiplier).toFixed(2)} kg` : '-'}
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-500 text-xs font-semibold">Approx. Volume</p>
+                                                            <p className="text-slate-800 font-bold">
+                                                                {currentSpecs.dimensions && currentSpecs.dimensions.length && currentSpecs.dimensions.breadth && currentSpecs.dimensions.height
+                                                                    ? `${((currentSpecs.dimensions.length * currentSpecs.dimensions.breadth * currentSpecs.dimensions.height * multiplier) / 1000).toFixed(2)} L` // Volume for 'multiplier' boxes
+                                                                    : '-'
+                                                                }
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 mt-2 italic">*Calculated based on standard product dimensions. Actual shipping dimensions may vary due to packaging.</p>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>
 
-                        {/* Shipping Calculator */}
-                        <div className="bg-white rounded-2xl p-4 shadow-sm mb-6">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-sm font-semibold text-slate-700">Calculate Shipping:</span>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder="110021"
-                                        value={pincode}
-                                        onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                        className="w-24 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-primary"
-                                    />
-                                    <button
-                                        onClick={handleCheckShipping}
-                                        className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
-                                    >
-                                        CHECK
-                                    </button>
-                                </div>
-                            </div>
 
-                            {shippingInfo && (
-                                <div className="flex items-start gap-3 pt-3 border-t border-slate-100">
-                                    <div className="w-24">
-                                        <img src="/shiprocket-logo.png" alt="Shiprocket" className="h-6" onError={(e) => e.target.style.display = 'none'} />
-                                        <span className="text-xs font-bold text-slate-600">🚀 Shiprocket</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 text-sm">
-                                            <span className="text-green-600">✓</span>
-                                            <span className="font-semibold">Delivery: ₹{shippingInfo.cost}</span>
-                                        </div>
-                                        <p className="text-xs text-slate-500">{shippingInfo.courier} • {shippingInfo.days}</p>
-                                        <p className="text-xs text-slate-400 mt-1">*Estimated delivery time based on your pincode</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
 
                         {/* Action Buttons */}
-                        <div className="flex gap-4 mb-4">
+                        <div className="flex flex-col sm:flex-row gap-4 mb-4">
                             <button
                                 onClick={handleAddToCart}
-                                className="flex-1 py-4 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary/5 transition-colors"
+                                className="flex-1 py-4 border-2 border-primary text-primary font-bold rounded-xl hover:bg-primary/5 transition-colors uppercase text-sm"
                             >
-                                ADD TO CART
+                                Add to Cart
+                            </button>
+                            <button
+                                onClick={handleBuyNow}
+                                className="flex-1 py-4 bg-primary text-white font-bold rounded-xl hover:bg-blue-600 transition-colors uppercase shadow-lg shadow-primary/20 text-sm"
+                            >
+                                Buy Now
                             </button>
                         </div>
 
@@ -425,6 +534,50 @@ const ProductDetail = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Related Products Section */}
+                {relatedProducts.length > 0 && (
+                    <div className="mb-12 border-t border-slate-200 pt-10">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Related Products</h2>
+                            <Link to={`/`} className="text-primary text-sm font-bold hover:underline flex items-center gap-1">
+                                View All <ChevronRight size={14} />
+                            </Link>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            {relatedProducts.map(relProduct => (
+                                <Link onClick={() => window.scrollTo(0, 0)} to={`/product/${relProduct._id}`} key={relProduct._id} className="group bg-white rounded-xl border border-slate-100 p-3 hover:shadow-xl transition-all hover:-translate-y-1 block">
+                                    <div className="relative aspect-square rounded-lg overflow-hidden bg-slate-50 mb-3">
+                                        <img
+                                            src={relProduct.imageUrls?.[0] || 'https://via.placeholder.com/300'}
+                                            alt={relProduct.title}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{relProduct.category}</div>
+                                        <h3 className="font-bold text-slate-800 line-clamp-1 group-hover:text-primary transition-colors text-sm">{relProduct.title}</h3>
+                                        <div className="flex items-center gap-1 text-xs text-yellow-500">
+                                            <Star size={12} fill="currentColor" />
+                                            <span className="font-bold text-slate-700">{relProduct.rating || 0}</span>
+                                            <span className="text-slate-400">({relProduct.reviewsCount || 0})</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-2 pt-1">
+                                            <span className="font-black text-slate-800">₹{relProduct.adminPrice}</span>
+                                            {relProduct.sellerPrice > relProduct.adminPrice && (
+                                                <span className="text-xs text-slate-400 line-through">₹{relProduct.sellerPrice}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Reviews Section */}
+                <ReviewSection productId={id} />
+
             </div>
         </div>
     );

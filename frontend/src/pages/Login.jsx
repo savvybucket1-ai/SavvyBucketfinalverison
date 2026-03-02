@@ -11,10 +11,12 @@ const Login = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await login(email, password);
+            await login(email, password, 'buyer');
+            localStorage.removeItem('cart');
+            window.dispatchEvent(new Event('cartUpdated'));
             navigate('/');
         } catch (err) {
-            setError('Invalid email or password');
+            setError(err.response?.data?.message || 'Invalid email/phone or password');
         }
     };
 
@@ -29,12 +31,12 @@ const Login = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Email or Phone Number</label>
                         <input
-                            type="email"
+                            type="text"
                             required
                             className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-                            placeholder="john@example.com"
+                            placeholder="john@example.com or 999..."
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                         />
@@ -49,6 +51,11 @@ const Login = () => {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                         />
+                    </div>
+                    <div className="flex justify-end">
+                        <Link to="/forgot-password?role=buyer" className="text-sm text-primary font-medium hover:underline">
+                            Forgot Password?
+                        </Link>
                     </div>
                     <button type="submit" className="w-full bg-slate-900 text-white py-3 rounded-lg font-semibold hover:bg-slate-800 transition duration-300 shadow-lg shadow-slate-200">
                         Sign In
