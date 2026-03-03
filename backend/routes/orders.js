@@ -339,7 +339,7 @@ router.get('/mock-payment-bypass', async (req, res) => {
 router.get('/admin/payouts', auth(['admin']), async (req, res) => {
     try {
         // Fetch all non-cancelled orders to show pending payouts too
-        const orders = await Order.find({ orderStatus: { $ne: 'cancelled' } })
+        const orders = await Order.find({ orderStatus: { $ne: 'cancelled' },paymentStatus: 'completed' })
             .populate('productId', 'title sellerId')
             .populate({
                 path: 'productId',

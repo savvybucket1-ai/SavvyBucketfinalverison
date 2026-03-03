@@ -4,7 +4,58 @@ const auth = require('../middleware/auth');
 const Order = require('../models/Order');
 const Shipment = require('../models/Shipment');
 const shiprocket = require('../utils/shiprocket');
+const User = require('../models/User');
 
+
+
+
+//pickup address save to user 
+router.post(
+  "/register-pickup",
+  auth(['seller']),
+  async (req, res) => {
+    try {
+      const user = await User.findById(req.user.id);
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const {
+        locationName,
+        name,
+        phone,
+        address,
+        address2,
+        city,
+        state,
+        pincode
+      } = req.body;
+
+      // Save in DB
+      user.pickupAddressDetails = {
+        locationName,
+        name,
+        phone,
+        address,
+        address2,
+        city,
+        state,
+        pincode
+      };
+
+      await user.save();
+
+      res.json({
+        message: "Pickup address saved successfully",
+        pickupAddressDetails: user.pickupAddressDetails
+      });
+
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
 // Create Shiprocket Order
 router.post('/create-order', auth(['seller', 'admin']), async (req, res) => {
     try {

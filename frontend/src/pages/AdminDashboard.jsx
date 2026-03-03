@@ -66,14 +66,26 @@ const AdminDashboard = () => {
         }
     };
 
-    const fetchOrders = async () => {
-        try {
-            const res = await axios.get(`${API_BASE_URL}/api/orders/my-orders`, { headers: getAuthHeader() });
-            setOrders(res.data);
-        } catch (err) {
-            console.error('Error fetching orders:', err);
-        }
-    };
+   const fetchOrders = async () => {
+    try {
+        const res = await axios.get(
+            `${API_BASE_URL}/api/orders/my-orders`,
+            { headers: getAuthHeader() }
+        );
+
+        // Show only payment pending orders
+        const pendingOrders = res.data.filter(
+            order => order.paymentStatus == 'completed'
+        );
+
+        setOrders(pendingOrders);
+
+        console.log("Pending Orders:", pendingOrders);
+    } catch (err) {
+        console.error('Error fetching orders:', err);
+    }
+};
+
 
     const fetchSellers = async () => {
         try {
