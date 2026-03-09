@@ -595,7 +595,7 @@ Chargeable: ${chargeableWeight}`);
         const totalAmountInINRWithShipping = amountInINR + totalShippingFeesInINR;
         const amount = totalAmountInINRWithShipping.toFixed(2);
 
-        const baseUrl = 'https://savvy-backend-hazel.vercel.app';
+        const baseUrl = 'https://savvy-backend-api.vercel.app';
 
 
         const data = {
@@ -697,16 +697,16 @@ router.post('/easebuzz-callback', express.urlencoded({ extended: true }), async 
 
                 // Clear cart (Optional: Frontend usually clears it on success page, but good to know)
                 console.log(`Payment success for transaction ${txnid}. ${orders.length} orders confirmed.`);
-                return res.redirect('https://savvy-frontend-teal.vercel.app/success');
+                return res.redirect('https://savvy-frontend-web.vercel.app/success');
             } else {
                 console.error(`Orders not found for transaction ${txnid}`);
-                return res.redirect('https://savvy-frontend-teal.vercel.app/cart?error=order_not_found');
+                return res.redirect('https://savvy-frontend-web.vercel.app/cart?error=order_not_found');
             }
         } else {
             // Payment Failed
             console.log(`Payment failed for transaction ${txnid}`);
             await Order.deleteMany({ easebuzzTransactionId: txnid }); // Cleanup
-            return res.redirect('https://savvy-frontend-teal.vercel.app/cart?error=payment_failed');
+            return res.redirect('https://savvy-frontend-web.vercel.app/cart?error=payment_failed');
         }
 
     } catch (err) {
@@ -775,7 +775,7 @@ router.get('/mock-payment-bypass', async (req, res) => {
                     <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
                         <h2 style="color:#0f172a;">Simulating Secure Payment...</h2>
                         <p style="color:#64748b;">Please wait while we redirect you.</p>
-                        <form action="https://savvy-backend-hazel.vercel.app/api/orders/easebuzz-callback" method="POST" name="payform">
+                        <form action="https://savvy-backend-api.vercel.app/api/orders/easebuzz-callback" method="POST" name="payform">
                             <input type="hidden" name="status" value="success">
                             <input type="hidden" name="txnid" value="${txnid}">
                             <input type="hidden" name="amount" value="${amount}">

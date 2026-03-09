@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function testVercel() {
     try {
-        const res = await axios.post('https://savvy-backend-hazel.vercel.app/api/orders/create-easebuzz-session', {
+        const res = await axios.post('https://savvy-backend-api.vercel.app/api/orders/create-easebuzz-session', {
             items: [{ productId: 'test', quantity: 1 }],
             shippingAddress: {}
         }, {

@@ -18,8 +18,8 @@ const options = {
                 description: 'Local server',
             },
             {
-                url: 'https://savvy-backend-hazel.vercel.app',
-                description: 'Production server',
+                url: 'https://savvy-backend-api.vercel.app',
+                description: 'Production Server'
             },
         ],
         components: {
