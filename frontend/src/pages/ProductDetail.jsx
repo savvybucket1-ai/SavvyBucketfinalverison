@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ChevronLeft, ChevronRight, Star, Truck, Minus, Plus, ShieldCheck, Lock, BadgePercent, ChevronDown } from 'lucide-react';
 import { getCurrentUser } from '../utils/auth';
+import { detectCountry, getGeoPrice, getCurrencySymbol, getPriceForQuantity } from '../utils/geoPrice';
 import ReviewSection from '../components/ReviewSection';
 import API_BASE_URL from '../config';
 
@@ -19,26 +20,28 @@ const ProductDetail = () => {
     const [selectedMoq, setSelectedMoq] = useState(1); // Selected MOQ from dropdown
     const [showQtyDropdown, setShowQtyDropdown] = useState(false);
     const user = getCurrentUser();
+    const [countryKey, setCountryKey] = useState('IN');
+    const [currencySymbol, setCurrencySymbol] = useState('₹');
 
     useEffect(() => {
-        const COMMON_COLORS = ['blue', 'green', 'red', 'yellow', 'black', 'white', 'orange', 'purple', 'pink', 'grey', 'gray', 'brown', 'gold', 'silver', 'beige', 'maroon', 'navy', 'teal', 'cream', 'mustard', 'olive', 'coral', 'lavender'];
+        detectCountry().then(key => {
+            setCountryKey(key);
+            setCurrencySymbol(getCurrencySymbol(key));
+        });
+    }, []);
+
+    useEffect(() => {
+        const COMMON_COLORS = ['blue', 'green', 'red', 'yellow', 'black', 'white', 'orange', 'purple', 'pink', 'grey', 'gray', 'brown', 'gold', 'silver', 'beige', 'maroon', 'navy', 'teal', 'cream', 'mustard', 'olive', 'coral', 'lavender', 'org'];
 
         axios.get(`${API_BASE_URL}/api/products/${id}`)
             .then(res => {
-                // Normalize Data: Merge split color variations (e.g. Name="Blue", Name="Green") into one "Color" variation
                 const productData = res.data;
-                if (productData.variations?.length > 1) {
-                    const colorVars = productData.variations.filter(v => COMMON_COLORS.includes(v.name.toLowerCase()));
-                    const otherVars = productData.variations.filter(v => !COMMON_COLORS.includes(v.name.toLowerCase()));
-
-                    if (colorVars.length > 1) {
-                        const mergedColorVar = {
-                            name: 'Color',
-                            values: colorVars.map(v => v.name)
-                        };
-                        // Place Color first, then others
-                        productData.variations = [mergedColorVar, ...otherVars];
-                    }
+                
+                // Tag color variations for mutually exclusive selection
+                if (productData.variations?.length > 0) {
+                    productData.variations.forEach(v => {
+                        v.isColorOption = COMMON_COLORS.includes(v.name.toLowerCase());
+                    });
                 }
 
                 setProduct(productData);
@@ -49,8 +52,18 @@ const ProductDetail = () => {
                 // Initialize default variations
                 if (productData.variations?.length > 0) {
                     const defaults = {};
+                    let colorSet = false;
                     productData.variations.forEach(v => {
-                        if (v.values?.length > 0) defaults[v.name] = v.values[0];
+                        if (v.values?.length > 0) {
+                            if (v.isColorOption) {
+                                if (!colorSet) {
+                                    defaults[v.name] = v.values[0];
+                                    colorSet = true; // Only set default for the first color group
+                                }
+                            } else {
+                                defaults[v.name] = v.values[0];
+                            }
+                        }
                     });
                     setSelectedOptions(defaults);
                 }
@@ -83,22 +96,8 @@ const ProductDetail = () => {
 
 
 
-    const getPriceForQuantity = (qty) => {
-        if (!product) return 0;
-        let price = product.adminPrice;
-        if (product.tieredPricing && product.tieredPricing.length > 0) {
-            // Sort tiers by MOQ descending to find the best price
-            const sortedTiers = [...product.tieredPricing].sort((a, b) => b.moq - a.moq);
-            const applicableTier = sortedTiers.find(tier => qty >= tier.moq);
-            if (applicableTier) {
-                price = applicableTier.price;
-            }
-        }
-        return price;
-    };
-
-    const currentUnitPrice = getPriceForQuantity(quantity);
-    const totalPriceWithGST =currentUnitPrice * (1 + (product?.gstPercentage || 0) / 100);
+    const currentUnitPrice = getPriceForQuantity(product, quantity, countryKey);
+    const totalPriceWithGST = currentUnitPrice * (1 + (product?.gstPercentage || 0) / 100);
     const totalOrderValue = totalPriceWithGST * quantity;
 
     const availableQuantities = product ? [
@@ -269,7 +268,20 @@ const ProductDetail = () => {
                                             {v.values.map((val, vIdx) => (
                                                 <button
                                                     key={vIdx}
-                                                    onClick={() => setSelectedOptions(prev => ({ ...prev, [v.name]: val }))}
+                                                    onClick={() => {
+                                                        setSelectedOptions(prev => {
+                                                            const next = { ...prev };
+                                                            if (v.isColorOption) {
+                                                                product.variations.forEach(pv => {
+                                                                    if (pv.isColorOption && pv.name !== v.name) {
+                                                                        delete next[pv.name];
+                                                                    }
+                                                                });
+                                                            }
+                                                            next[v.name] = val;
+                                                            return next;
+                                                        });
+                                                    }}
                                                     className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-all ${selectedOptions[v.name] === val
                                                         ? 'border-primary bg-primary/5 text-primary'
                                                         : 'border-slate-200 hover:border-slate-300 text-slate-600 bg-white'
@@ -288,16 +300,16 @@ const ProductDetail = () => {
                         {/* Price */}
                         <div className="flex flex-col mb-6">
                             <div className="flex items-baseline gap-2">
-                                <span className="text-4xl font-black text-slate-800">₹{totalPriceWithGST.toLocaleString()}</span>
+                                <span className="text-4xl font-black text-slate-800">{currencySymbol}{totalPriceWithGST.toLocaleString()}</span>
                                 <span className="text-sm font-bold text-slate-500">(Incl. of all taxes)</span>
                             </div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-lg font-bold text-slate-600">₹{currentUnitPrice.toLocaleString()}</span>
+                                <span className="text-lg font-bold text-slate-600">{currencySymbol}{currentUnitPrice.toLocaleString()}</span>
                                 <span className="text-sm font-medium text-slate-400">+ {product.gstPercentage}% GST</span>
                             </div>
                             {quantity > 1 && (
                                 <div className="mt-1 text-red-500 font-bold text-sm">
-                                    Total Value: ₹{totalOrderValue.toLocaleString()}
+                                    Total Value: {currencySymbol}{totalOrderValue.toLocaleString()}
                                 </div>
                             )}
                         </div>
@@ -563,9 +575,9 @@ const ProductDetail = () => {
                                             <span className="text-slate-400">({relProduct.reviewsCount || 0})</span>
                                         </div>
                                         <div className="flex items-baseline gap-2 pt-1">
-                                            <span className="font-black text-slate-800">₹{relProduct.adminPrice}</span>
-                                            {relProduct.sellerPrice > relProduct.adminPrice && (
-                                                <span className="text-xs text-slate-400 line-through">₹{relProduct.sellerPrice}</span>
+                                            <span className="font-black text-slate-800">{currencySymbol}{getGeoPrice(relProduct.adminPrice, countryKey)}</span>
+                                            {relProduct.sellerPrice > getGeoPrice(relProduct.adminPrice, countryKey) && (
+                                                <span className="text-xs text-slate-400 line-through">{currencySymbol}{relProduct.sellerPrice}</span>
                                             )}
                                         </div>
                                     </div>

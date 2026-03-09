@@ -290,7 +290,7 @@ router.post('/verify-email-otp', async (req, res) => {
             return res.json({ message: 'Verification Successful! Your account is pending Admin Approval.', requireApproval: true });
         }
 
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
         res.json({ message: 'Verification Successful', token, user: { id: user._id, name: user.name, role: user.role, email: user.email, phone: user.phone } });
 
     } catch (err) {
@@ -382,7 +382,7 @@ router.post('/login', async (req, res) => {
             return res.status(403).json({ message: 'Your account is currently under review by the Admin. You will be notified once approved.' });
         }
 
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
         res.json({ token, user: { id: user._id, name: user.name, role: user.role, email: user.email, phone: user.phone } });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -680,7 +680,7 @@ router.get('/profile', auth(['buyer', 'seller', 'admin']), async (req, res) => {
 // Update Current User Profile
 router.put('/profile', auth(['buyer', 'seller', 'admin']), async (req, res) => {
     try {
-        const { name, phone, pickupAddress, shiprocketNickname, bankDetails, gstNumber } = req.body;
+        const { name, phone, pickupAddress, shiprocketNickname, bankDetails, gstNumber, shippingAddress } = req.body;
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -690,9 +690,10 @@ router.put('/profile', auth(['buyer', 'seller', 'admin']), async (req, res) => {
         if (shiprocketNickname) user.shiprocketNickname = shiprocketNickname;
         if (gstNumber) user.gstNumber = gstNumber;
         if (bankDetails) user.bankDetails = { ...user.bankDetails, ...bankDetails };
+        if (shippingAddress) user.shippingAddress = { ...user.shippingAddress, ...shippingAddress };
 
         await user.save();
-        res.json({ message: 'Profile updated successfully', user: { id: user._id, name: user.name, role: user.role, email: user.email, phone: user.phone, pickupAddress: user.pickupAddress, shiprocketNickname: user.shiprocketNickname } });
+        res.json({ message: 'Profile updated successfully', user: { id: user._id, name: user.name, role: user.role, email: user.email, phone: user.phone, pickupAddress: user.pickupAddress, shiprocketNickname: user.shiprocketNickname, shippingAddress: user.shippingAddress } });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

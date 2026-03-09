@@ -3,6 +3,7 @@ import { useParams, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { ShoppingCart, Star, Filter, ChevronDown, ChevronRight, LayoutGrid, List, Heart, ShoppingBag, Minus, Plus } from 'lucide-react';
 import { categories } from '../utils/categories';
+import { detectCountry, getGeoPrice, getCurrencySymbol, getPriceForQuantity } from '../utils/geoPrice';
 import API_BASE_URL from '../config';
 
 const CategoryPage = () => {
@@ -23,6 +24,15 @@ const CategoryPage = () => {
     // New State for Sorting and View Mode
     const [sortBy, setSortBy] = useState('relevance');
     const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+    const [countryKey, setCountryKey] = useState('IN');
+    const [currencySymbol, setCurrencySymbol] = useState('₹');
+
+    useEffect(() => {
+        detectCountry().then(key => {
+            setCountryKey(key);
+            setCurrencySymbol(getCurrencySymbol(key));
+        });
+    }, []);
 
     // Update activeSubCategory when URL param changes
     useEffect(() => {
@@ -287,7 +297,8 @@ const CategoryPage = () => {
                             }>
                                 {products.map(product => {
                                     const qty = quantities[product._id] || product.moq || 1;
-                                    const priceWithGST = Math.round(product.adminPrice * (1 + (product.gstPercentage || 0) / 100));
+                                    const currentUnitPrice = getPriceForQuantity(product, qty, countryKey);
+                                    const priceWithGST = Math.round(currentUnitPrice * (1 + (product.gstPercentage || 0) / 100));
 
                                     return (
                                         <div key={product._id} className="block relative group">
@@ -314,10 +325,10 @@ const CategoryPage = () => {
 
                                                         <div className="flex flex-col mb-3">
                                                             <div className="flex items-baseline gap-1">
-                                                                <span className="text-lg font-black text-slate-800">₹{priceWithGST.toLocaleString()}</span>
+                                                                <span className="text-lg font-black text-slate-800">{currencySymbol}{priceWithGST.toLocaleString()}</span>
                                                                 <span className="text-[10px] font-bold text-slate-500">(Incl. of all taxes)</span>
                                                             </div>
-                                                            <span className="text-[10px] text-slate-400 font-medium">₹{product.adminPrice} + {product.gstPercentage}% GST</span>
+                                                            <span className="text-[10px] text-slate-400 font-medium">{currencySymbol}{currentUnitPrice} + {product.gstPercentage}% GST</span>
                                                         </div>
 
                                                         <div className="flex flex-col gap-3">
@@ -389,10 +400,10 @@ const CategoryPage = () => {
                                                         <div className="flex flex-col items-end gap-4 min-w-[140px]">
                                                             <div className="text-right">
                                                                 <div className="flex items-baseline justify-end gap-1">
-                                                                    <span className="text-xl font-black text-slate-800">₹{priceWithGST.toLocaleString()}</span>
+                                                                    <span className="text-xl font-black text-slate-800">{currencySymbol}{priceWithGST.toLocaleString()}</span>
                                                                     <span className="text-[10px] font-bold text-slate-500">(Incl. Tax)</span>
                                                                 </div>
-                                                                <span className="text-xs text-slate-400 font-medium block">₹{product.adminPrice} + {product.gstPercentage}% GST</span>
+                                                                <span className="text-xs text-slate-400 font-medium block">{currencySymbol}{currentUnitPrice} + {product.gstPercentage}% GST</span>
                                                             </div>
 
                                                             <div className="flex items-center bg-white border border-slate-200 rounded-full p-0.5" onClick={(e) => e.preventDefault()}>

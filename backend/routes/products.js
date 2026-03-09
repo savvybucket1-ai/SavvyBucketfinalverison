@@ -282,7 +282,28 @@ router.patch('/admin/approve/:id', auth(['admin']), async (req, res) => {
         const updateData = { status };
 
         if (status === 'approved') {
-            updateData.adminPrice = Number(adminPrice) || 0;
+            // Save country-wise prices
+            if (adminPrice && typeof adminPrice === 'object') {
+                updateData.adminPrice = {
+                    IN: Number(adminPrice.IN) || 0,
+                    US: Number(adminPrice.US) || 0,
+                    UK: Number(adminPrice.UK) || 0,
+                    CA: Number(adminPrice.CA) || 0,
+                    AU: Number(adminPrice.AU) || 0,
+                    UAE: Number(adminPrice.UAE) || 0,
+                };
+            } else {
+                // Fallback: if a single number was sent, use it for IN
+                const singlePrice = Number(adminPrice) || 0;
+                updateData.adminPrice = {
+                    IN: singlePrice,
+                    US: 0,
+                    UK: 0,
+                    CA: 0,
+                    AU: 0,
+                    UAE: 0,
+                };
+            }
             updateData.commission = Number(commission) || 0;
             updateData.title = title;
             updateData.description = description;

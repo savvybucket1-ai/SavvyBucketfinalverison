@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ShoppingCart, Star, Minus, Plus, BadgePercent, Clock } from 'lucide-react';
+import { detectCountry, getGeoPrice, getCurrencySymbol, getPriceForQuantity } from '../utils/geoPrice';
 import API_BASE_URL from '../config';
 
 const JustArrived = () => {
@@ -9,8 +10,15 @@ const JustArrived = () => {
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
     const [quantities, setQuantities] = useState({});
+    const [countryKey, setCountryKey] = useState('IN');
+    const [currencySymbol, setCurrencySymbol] = useState('₹');
 
     useEffect(() => {
+        detectCountry().then(key => {
+            setCountryKey(key);
+            setCurrencySymbol(getCurrencySymbol(key));
+        });
+
         axios.get(`${API_BASE_URL}/api/products/buyer/latest`)
             .then(res => {
                 if (Array.isArray(res.data)) {
@@ -27,22 +35,9 @@ const JustArrived = () => {
             });
     }, []);
 
-    const getPriceForQuantity = (product, qty) => {
-        if (!product) return 0;
-        let price = product.adminPrice;
-        if (product.tieredPricing && product.tieredPricing.length > 0) {
-            const sortedTiers = [...product.tieredPricing].sort((a, b) => b.moq - a.moq);
-            const applicableTier = sortedTiers.find(tier => qty >= tier.moq);
-            if (applicableTier) {
-                price = applicableTier.price;
-            }
-        }
-        return price;
-    };
-
     const handleAddToCart = (product) => {
         const qty = quantities[product._id] || product.moq || 1;
-        const currentPrice = getPriceForQuantity(product, qty);
+        const currentPrice = getPriceForQuantity(product, qty, countryKey);
         const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
         const existingItem = existingCart.find(item => item._id === product._id);
 
@@ -118,13 +113,13 @@ const JustArrived = () => {
 
                                     {(() => {
                                         const qty = quantities[product._id] || product.moq || 1;
-                                        const currentUnitPrice = getPriceForQuantity(product, qty);
+                                        const currentUnitPrice = getPriceForQuantity(product, qty, countryKey);
                                         const priceWithGST = Math.round(currentUnitPrice * (1 + (product.gstPercentage || 0) / 100));
                                         return (
                                             <div className="flex flex-col mb-3 mt-auto">
-                                                <span className="text-[10px] text-slate-400 font-medium">₹{priceWithGST.toLocaleString()} (Incl. taxes)</span>
+                                                <span className="text-[10px] text-slate-400 font-medium">{currencySymbol}{priceWithGST.toLocaleString()} (Incl. taxes)</span>
                                                 <div className="flex items-baseline gap-1">
-                                                    <span className="text-lg font-black text-slate-800">₹{currentUnitPrice}</span>
+                                                    <span className="text-lg font-black text-slate-800">{currencySymbol}{currentUnitPrice}</span>
                                                     <span className="text-[10px] font-bold text-slate-500">+ {product.gstPercentage}% GST</span>
                                                 </div>
                                             </div>

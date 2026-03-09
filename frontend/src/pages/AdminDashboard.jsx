@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader, getCurrentUser } from '../utils/auth';
-import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video, UserPlus, FileText, CheckCircle, XCircle, Menu, Wallet, Clock } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video, UserPlus, FileText, CheckCircle, XCircle, Menu, Wallet, Clock, Truck } from 'lucide-react';
 import AdminInfluencerVideos from './AdminInfluencerVideos';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/DashboardSidebar';
+import ShippingCalculator from '../components/ShippingCalculator';
 
 import API_BASE_URL from '../config';
 
@@ -13,7 +14,28 @@ const AdminDashboard = () => {
     const [pendingProducts, setPendingProducts] = useState([]);
     const [approvedProducts, setApprovedProducts] = useState([]);
     const [editingProduct, setEditingProduct] = useState(null);
-    const [approvalData, setApprovalData] = useState({ adminPrice: '', commission: '', title: '', description: '', moq: '', hsnCode: '', gstPercentage: '', variations: [], tieredPricing: [], category: '', stock: '', imageUrls: [] });
+    const [approvalData, setApprovalData] = useState({
+        adminPrice: '',
+        commission: '',
+        title: '',
+        description: '',
+        moq: '',
+        hsnCode: '',
+        gstPercentage: '',
+        variations: [],
+        tieredPricing: [],
+        category: '',
+        stock: '',
+        imageUrls: [],
+        prices: {
+            IN: '',
+            US: '',
+            UK: '',
+            CA: '',
+            AU: '',
+            UAE: ''
+        }
+    });
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
     // Dashboard Analytics State
@@ -66,25 +88,25 @@ const AdminDashboard = () => {
         }
     };
 
-   const fetchOrders = async () => {
-    try {
-        const res = await axios.get(
-            `${API_BASE_URL}/api/orders/my-orders`,
-            { headers: getAuthHeader() }
-        );
+    const fetchOrders = async () => {
+        try {
+            const res = await axios.get(
+                `${API_BASE_URL}/api/orders/my-orders`,
+                { headers: getAuthHeader() }
+            );
 
-        // Show only payment pending orders
-        const pendingOrders = res.data.filter(
-            order => order.paymentStatus == 'completed'
-        );
+            // Show only payment pending orders
+            const pendingOrders = res.data.filter(
+                order => order.paymentStatus == 'completed'
+            );
 
-        setOrders(pendingOrders);
+            setOrders(pendingOrders);
 
-        console.log("Pending Orders:", pendingOrders);
-    } catch (err) {
-        console.error('Error fetching orders:', err);
-    }
-};
+            console.log("Pending Orders:", pendingOrders);
+        } catch (err) {
+            console.error('Error fetching orders:', err);
+        }
+    };
 
 
     const fetchSellers = async () => {
@@ -213,6 +235,17 @@ const AdminDashboard = () => {
                 payload.adminPrice = parseFloat(payload.adminPrice) || 0;
             }
 
+            // Build country-wise adminPrice object from the prices form fields
+            const basePrice = typeof payload.adminPrice === 'number' ? payload.adminPrice : 0;
+            payload.adminPrice = {
+                IN: parseFloat(payload.prices?.IN) || basePrice,
+                US: parseFloat(payload.prices?.US) || 0,
+                UK: parseFloat(payload.prices?.UK) || 0,
+                CA: parseFloat(payload.prices?.CA) || 0,
+                AU: parseFloat(payload.prices?.AU) || 0,
+                UAE: parseFloat(payload.prices?.UAE) || 0,
+            };
+
             await axios.patch(`${API_BASE_URL}/api/products/admin/approve/${id}`,
                 payload,
                 { headers: getAuthHeader() }
@@ -252,6 +285,7 @@ const AdminDashboard = () => {
         { label: 'Sellers', icon: Users, path: '/admin/sellers' },
         { label: 'Buyers', icon: UserCheck, path: '/admin/buyers' },
         { label: 'Influencer Videos', icon: Video, path: '/admin/videos' },
+        { label: 'Shipping Calculator', icon: Truck, path: '/admin/shipping-calculator' },
         { label: 'Commission Settings', icon: BadgePercent, path: '/admin/settings' },
     ];
 
@@ -507,14 +541,21 @@ const AdminDashboard = () => {
                                                                     moq: p.moq,
                                                                     hsnCode: p.hsnCode,
                                                                     gstPercentage: p.gstPercentage,
-                                                                    variations: p.variations || [],
-                                                                    tieredPricing: (p.tieredPricing || []).map(t => ({
-                                                                        ...t,
-                                                                        price: t.price + (t.price * (commission / 100))
-                                                                    })),
                                                                     category: p.category,
                                                                     stock: p.stock,
-                                                                    imageUrls: p.imageUrls || []
+                                                                    imageUrls: p.imageUrls || [],
+
+                                                                    variations: p.variations || [],
+                                                                    tieredPricing: p.tieredPricing || [],
+
+                                                                    prices: {
+                                                                        IN: p.sellerPrice, // 🇮🇳 Default from seller price
+                                                                        US: '',
+                                                                        UK: '',
+                                                                        CA: '',
+                                                                        AU: '',
+                                                                        UAE: ''
+                                                                    }
                                                                 });
                                                             }}
                                                             className="bg-primary text-white text-[10px] font-black uppercase px-4 py-2 rounded-lg hover:bg-blue-600 transition shadow-sm shadow-blue-200 flex items-center ml-auto"
@@ -616,6 +657,7 @@ const AdminDashboard = () => {
                         <Route path="/payouts" element={<PayoutsView />} />
                         <Route path="/orders" element={<OrdersView orders={orders} />} />
                         <Route path="/videos" element={<AdminInfluencerVideos />} />
+                        <Route path="/shipping-calculator" element={<ShippingCalculator />} />
                         <Route path="/settings" element={
                             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
                                 <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
@@ -650,11 +692,11 @@ const AdminDashboard = () => {
             {/* Approval Modal */}
             {editingProduct && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full border border-slate-200 my-8">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 max-w-lg w-full border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl font-black text-slate-800 mb-6 uppercase tracking-tight flex items-center">
                             <BadgePercent className="mr-2 text-primary" /> Product Approval & Pricing
                         </h2>
-                        <div className="space-y-4">
+                        <div className="space-y-10">
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Edit Title (Marketplace Display)</label>
                                 <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
@@ -673,7 +715,7 @@ const AdminDashboard = () => {
                                 </div>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Edit Description</label>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1 custom-space">Edit Description</label>
                                 <textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700 h-24"
                                     value={approvalData.description} onChange={e => setApprovalData({ ...approvalData, description: e.target.value })} />
                             </div>
@@ -697,6 +739,51 @@ const AdminDashboard = () => {
                                     <input type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
                                         value={approvalData.commission} onChange={e => setApprovalData({ ...approvalData, commission: e.target.value })} />
                                 </div>
+                            </div>
+
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mt-4">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">
+                                    Country Prices
+                                </label>
+
+                                {[
+                                    { code: "IN", symbol: "₹" },
+                                    { code: "US", symbol: "$" },
+                                    { code: "UK", symbol: "£" },
+                                    { code: "CA", symbol: "C$" },
+                                    { code: "AU", symbol: "A$" },
+                                    { code: "UAE", symbol: "AD " }
+                                ].map((country) => (
+                                    <div key={country.code} className="flex items-center mb-2">
+
+                                        <span className="w-12 text-xs font-bold text-slate-500">
+                                            {country.code}
+                                        </span>
+
+                                        <div className="relative w-full">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
+                                                {country.symbol}
+                                            </span>
+
+                                            <input
+                                                type="number"
+                                                inputMode="decimal"
+                                                value={approvalData.prices[country.code]}
+                                                onChange={(e) =>
+                                                    setApprovalData({
+                                                        ...approvalData,
+                                                        prices: {
+                                                            ...approvalData.prices,
+                                                            [country.code]: e.target.value
+                                                        }
+                                                    })
+                                                }
+                                                className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary font-bold text-sm text-slate-700"
+                                            />
+                                        </div>
+
+                                    </div>
+                                ))}
                             </div>
 
                             {/* Image Preview Section */}
@@ -727,6 +814,8 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
                             )}
+
+
 
                             {/* Tiered Pricing Review Section */}
                             {approvalData.tieredPricing && approvalData.tieredPricing.length > 0 && (
@@ -948,7 +1037,7 @@ const SellersView = ({ sellers, handleToggleBlock }) => {
             {/* Seller Details Modal */}
             {selectedSeller && (
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4 overflow-y-auto">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full border border-slate-200 my-8 relative">
+                    <div className="bg-white rounded-2xl shadow-2xl p-6 lg:p-8 max-w-2xl w-full border border-slate-200 relative max-h-[90vh] overflow-y-auto">
                         <button
                             onClick={() => setSelectedSeller(null)}
                             className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
@@ -1164,7 +1253,7 @@ const ApprovedProductsView = ({ products, onToggleTrending }) => {
                                 <td className="px-6 py-4 text-center">
                                     <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
                                 </td>
-                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.adminPrice}</td>
+                                 <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.adminPrice?.IN || 0}</td>
                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
                                 <td className="px-6 py-4 text-center">
                                     <button

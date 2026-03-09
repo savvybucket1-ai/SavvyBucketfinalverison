@@ -4,6 +4,7 @@ import axios from 'axios';
 import { ShoppingCart, ExternalLink, ChevronRight, Zap, Truck, ShieldCheck, CreditCard, Mail, Star, Minus, Plus, BadgePercent, Heart } from 'lucide-react';
 import { getCurrentUser } from '../utils/auth';
 import { categories } from '../utils/categories';
+import { detectCountry, getGeoPrice, getCurrencySymbol, getPriceForQuantity } from '../utils/geoPrice';
 import API_BASE_URL from '../config';
 
 const BuyerHome = () => {
@@ -14,8 +15,15 @@ const BuyerHome = () => {
     const navigate = useNavigate();
 
     const [quantities, setQuantities] = useState({});
+    const [countryKey, setCountryKey] = useState('IN');
+    const [currencySymbol, setCurrencySymbol] = useState('₹');
 
     useEffect(() => {
+        detectCountry().then(key => {
+            setCountryKey(key);
+            setCurrencySymbol(getCurrencySymbol(key));
+        });
+
         axios.get(`${API_BASE_URL}/api/products/buyer/list`)
             .then(res => {
                 if (Array.isArray(res.data)) {
@@ -36,22 +44,9 @@ const BuyerHome = () => {
             .catch(err => console.error("Error fetching videos:", err));
     }, []);
 
-    const getPriceForQuantity = (product, qty) => {
-        if (!product) return 0;
-        let price = product.adminPrice;
-        if (product.tieredPricing && product.tieredPricing.length > 0) {
-            const sortedTiers = [...product.tieredPricing].sort((a, b) => b.moq - a.moq);
-            const applicableTier = sortedTiers.find(tier => qty >= tier.moq);
-            if (applicableTier) {
-                price = applicableTier.price;
-            }
-        }
-        return price;
-    };
-
     const handleAddToCart = (product) => {
         const qty = quantities[product._id] || product.moq || 1;
-        const currentPrice = getPriceForQuantity(product, qty);
+        const currentPrice = getPriceForQuantity(product, qty, countryKey);
         const existingCart = JSON.parse(localStorage.getItem('cart') || '[]');
         const existingItem = existingCart.find(item => item._id === product._id);
 
@@ -205,13 +200,13 @@ const BuyerHome = () => {
                                         <div className="flex flex-col">
                                             {(() => {
                                                 const qty = product.moq || 1;
-                                                const currentUnitPrice = getPriceForQuantity(product, qty);
+                                                const currentUnitPrice = getPriceForQuantity(product, qty, countryKey);
                                                 const priceWithGST = Math.round(currentUnitPrice * (1 + (product.gstPercentage || 0) / 100));
                                                 return (
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-baseline gap-1">
-                                                                <span className="font-black text-slate-900">₹{priceWithGST.toLocaleString()}</span>
+                                                                <span className="font-black text-slate-900">{currencySymbol}{priceWithGST.toLocaleString()}</span>
                                                                 <span className="text-[8px] font-bold text-slate-500">(Incl. Tax)</span>
                                                             </div>
                                                             <div className="flex items-center gap-2">
@@ -229,7 +224,7 @@ const BuyerHome = () => {
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                        <span className="text-[9px] text-slate-400 font-medium mt-1">₹{currentUnitPrice} + {product.gstPercentage}% GST</span>
+                                                        <span className="text-[9px] text-slate-400 font-medium mt-1">{currencySymbol}{currentUnitPrice} + {product.gstPercentage}% GST</span>
                                                     </div>
                                                 );
                                             })()}
@@ -290,17 +285,17 @@ const BuyerHome = () => {
 
                                     {(() => {
                                         const qty = quantities[product._id] || product.moq || 1;
-                                        const currentUnitPrice = getPriceForQuantity(product, qty);
+                                        const currentUnitPrice = getPriceForQuantity(product, qty, countryKey);
                                         const priceWithGST = Math.round(currentUnitPrice * (1 + (product.gstPercentage || 0) / 100));
                                         return (
                                             <div className="flex flex-col mb-3">
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex flex-col mb-1">
                                                         <div className="flex items-baseline flex-wrap gap-1">
-                                                            <span className="text-lg font-black text-slate-800">₹{priceWithGST.toLocaleString()}</span>
+                                                            <span className="text-lg font-black text-slate-800">{currencySymbol}{priceWithGST.toLocaleString()}</span>
                                                             <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">(Incl. of all taxes)</span>
                                                         </div>
-                                                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">₹{currentUnitPrice} + {product.gstPercentage}% GST</span>
+                                                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">{currencySymbol}{currentUnitPrice} + {product.gstPercentage}% GST</span>
                                                     </div>
                                                     <button
                                                         onClick={(e) => toggleWishlist(e, product)}

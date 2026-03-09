@@ -8,7 +8,14 @@ const productSchema = new mongoose.Schema({
     hsnCode: { type: String, required: true, minlength: 6 },
     gstPercentage: { type: Number, required: true },
     sellerPrice: { type: Number },
-    adminPrice: { type: Number },
+    adminPrice:  {
+        IN: { type: Number },   // India
+        US: { type: Number },   // United States
+        UK: { type: Number },   // United Kingdom
+        CA: { type: Number },   // Canada
+        AU: { type: Number },   // Australia
+        UAE: { type: Number } , // UAE 
+    },
     commission: { type: Number, default: 0 },
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },

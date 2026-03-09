@@ -6,6 +6,7 @@ import { Routes, Route } from 'react-router-dom';
 import Sidebar from '../components/DashboardSidebar';
 import { categories } from '../utils/categories';
 import ShipmentManager from '../components/ShipmentManager';
+import ShippingCalculator from '../components/ShippingCalculator';
 
 import API_BASE_URL from '../config';
 
@@ -55,7 +56,40 @@ const SellerDashboard = () => {
     useEffect(() => {
         fetchProducts();
         fetchOrders();
+        fetchProfileSilently();
     }, []);
+
+    const fetchProfileSilently = async () => {
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/auth/profile`, { headers: getAuthHeader() });
+            setProfile(res.data);
+            if (res.data.pickupAddressDetails?.locationName) {
+                setPickupForm({
+                    locationName: res.data.pickupAddressDetails.locationName || '',
+                    name: res.data.pickupAddressDetails.name || '',
+                    phone: res.data.pickupAddressDetails.phone || '',
+                    address: res.data.pickupAddressDetails.address || '',
+                    address2: res.data.pickupAddressDetails.address2 || '',
+                    city: res.data.pickupAddressDetails.city || '',
+                    state: res.data.pickupAddressDetails.state || '',
+                    pincode: res.data.pickupAddressDetails.pincode || ''
+                });
+            } else {
+                setPickupForm({
+                    locationName: 'Primary',
+                    name: res.data.name || '',
+                    phone: res.data.phone || '',
+                    address: res.data.pickupAddress || '', // Linked from seller registration
+                    address2: '',
+                    city: '',
+                    state: '',
+                    pincode: '' // Prompt user explicitly for pincode
+                });
+            }
+        } catch (err) {
+            console.error('Error fetching profile silently:', err);
+        }
+    };
 
 const fetchOrders = async () => {
     try {
@@ -163,6 +197,8 @@ const fetchOrders = async () => {
             // Append new files
             selectedFiles.forEach(file => data.append('images', file));
 
+            const isFirstProduct = products.length === 0 && !isEdit;
+
             if (isEdit) {
                 // Update existing product
                 await axios.put(`${API_BASE_URL}/api/products/seller/update/${editId}`, data, {
@@ -184,6 +220,11 @@ const fetchOrders = async () => {
             setSelectedFiles([]);
             setPreviews([]);
             fetchProducts();
+
+            if (isFirstProduct || !profile?.pickupAddressDetails?.pincode) {
+                setProfileTab('pickup');
+                setShowProfileModal(true);
+            }
         } catch (err) {
             alert('Error processing product: ' + (err.response?.data?.error || err.message));
         } finally {
@@ -242,6 +283,7 @@ const fetchOrders = async () => {
         { label: 'Dashboard', icon: LayoutDashboard, path: '/seller' },
         { label: 'My Products', icon: Package, path: '/seller/products' },
         { label: 'Orders', icon: ShoppingCart, path: '/seller/orders' },
+        { label: 'Shipping Calculator', icon: Truck, path: '/seller/shipping-calculator' },
         { label: 'Earnings', icon: IndianRupee, path: '/seller/earnings' },
     ];
 
@@ -275,28 +317,8 @@ const fetchOrders = async () => {
     };
 
     const handleProfileClick = async () => {
-        try {
-            const res = await axios.get(`${API_BASE_URL}/api/auth/profile`, { headers: getAuthHeader() });
-            const userData = res.data;
-            setProfile(userData);
-            // Pre-fill pickup form with saved data
-            if (userData.pickupAddressDetails?.locationName) {
-                setPickupForm({
-                    locationName: userData.pickupAddressDetails.locationName || '',
-                    name: userData.pickupAddressDetails.name || '',
-                    phone: userData.pickupAddressDetails.phone || '',
-                    address: userData.pickupAddressDetails.address || '',
-                    address2: userData.pickupAddressDetails.address2 || '',
-                    city: userData.pickupAddressDetails.city || '',
-                    state: userData.pickupAddressDetails.state || '',
-                    pincode: userData.pickupAddressDetails.pincode || ''
-                });
-            }
-            setShowProfileModal(true);
-        } catch (err) {
-            console.error(err);
-            alert('Failed to fetch profile');
-        }
+        await fetchProfileSilently();
+        setShowProfileModal(true);
     };
 
     const [profileTab, setProfileTab] = useState('profile');
@@ -712,6 +734,7 @@ const fetchOrders = async () => {
                                 </div>
                             </div>
                         } />
+                        <Route path="/shipping-calculator" element={<ShippingCalculator />} />
                     </Routes>
                 </main>
             </div>
@@ -840,10 +863,10 @@ const fetchOrders = async () => {
                                         <div className="grid grid-cols-7 gap-2 mb-2 min-w-[500px]">
                                             <div className="text-[9px] font-black uppercase text-slate-400">MOQ</div>
                                             <div className="text-[9px] font-black uppercase text-slate-400">Price</div>
-                                            <div className="text-[9px] font-black uppercase text-slate-400">Length</div>
-                                            <div className="text-[9px] font-black uppercase text-slate-400">Width</div>
-                                            <div className="text-[9px] font-black uppercase text-slate-400">Height</div>
-                                            <div className="text-[9px] font-black uppercase text-slate-400">Weight</div>
+                                            <div className="text-[9px] font-black uppercase text-slate-400">Length (cm)</div>
+                                            <div className="text-[9px] font-black uppercase text-slate-400">Width (cm)</div>
+                                            <div className="text-[9px] font-black uppercase text-slate-400">Height (cm)</div>
+                                            <div className="text-[9px] font-black uppercase text-slate-400">Weight (kg)</div>
                                             <div className="w-6"></div>
                                         </div>
                                         <div className="space-y-2 min-w-[500px]">
@@ -853,13 +876,13 @@ const fetchOrders = async () => {
                                                         value={tier.moq} onChange={e => { const newT = [...tieredPricing]; newT[idx].moq = e.target.value; setTieredPricing(newT); }} />
                                                     <input type="number" placeholder="₹" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
                                                         value={tier.price} onChange={e => { const newT = [...tieredPricing]; newT[idx].price = e.target.value; setTieredPricing(newT); }} />
-                                                    <input type="number" placeholder="L" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
+                                                    <input type="number" placeholder="L (cm)" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
                                                         value={tier.length} onChange={e => { const newT = [...tieredPricing]; newT[idx].length = e.target.value; setTieredPricing(newT); }} />
-                                                    <input type="number" placeholder="B" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
+                                                    <input type="number" placeholder="B (cm)" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
                                                         value={tier.breadth} onChange={e => { const newT = [...tieredPricing]; newT[idx].breadth = e.target.value; setTieredPricing(newT); }} />
-                                                    <input type="number" placeholder="H" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
+                                                    <input type="number" placeholder="H (cm)" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
                                                         value={tier.height} onChange={e => { const newT = [...tieredPricing]; newT[idx].height = e.target.value; setTieredPricing(newT); }} />
-                                                    <input type="number" placeholder="Wt" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
+                                                    <input type="number" placeholder="Wt (kg)" className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
                                                         value={tier.weight} onChange={e => { const newT = [...tieredPricing]; newT[idx].weight = e.target.value; setTieredPricing(newT); }} />
                                                     <button type="button" onClick={() => setTieredPricing(tieredPricing.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600"><XCircle size={16} /></button>
                                                 </div>
@@ -1033,7 +1056,7 @@ const fetchOrders = async () => {
                                         </div>
                                     ) : (
                                         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700 font-bold">
-                                            📍 No pickup address set yet. Add one below to enable automatic ShipRocket pickup.
+                                            📍 Is this Pickup Address correct? Please complete specific details like pincode, city and state to enable automatic ShipRocket pickup!
                                         </div>
                                     )}
 

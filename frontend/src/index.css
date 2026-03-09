@@ -38,3 +38,4 @@ body {
 .category-sidebar-item {
   @apply flex items-center px-4 py-2 hover:bg-orange-50 hover:text-primary transition-colors cursor-pointer text-sm font-medium text-slate-700;
 }
+

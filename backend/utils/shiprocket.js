@@ -12,12 +12,16 @@ async function getAuthToken() {
         return srToken;
     }
 
-    const email = process.env.SHIPROCKET_EMAIL;
-    const password = process.env.SHIPROCKET_PASSWORD;
+    let email = process.env.SHIPROCKET_EMAIL;
+    let password = process.env.SHIPROCKET_PASSWORD;
 
     if (!email || !password) {
         throw new Error('ShipRocket credentials not set in environment variables');
     }
+
+    // Strip surrounding quotes that dotenv sometimes preserves (e.g. PASSWORD="abc" → "abc" with quotes)
+    email = email.replace(/^"|"$/g, '').trim();
+    password = password.replace(/^"|"$/g, '').trim();
 
     try {
         const response = await axios.post(`${SHIPROCKET_API_BASE}/auth/login`, {
@@ -25,12 +29,17 @@ async function getAuthToken() {
             password
         });
         srToken = response.data.token;
-        // ShipRocket tokens typically expire in 10 days, let's play it safe and cache for 24 hours
-        tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+        // ShipRocket tokens typically expire in 10 days, cache for 23 hours to be safe
+        tokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
+        console.log('[ShipRocket] Auth token refreshed successfully');
         return srToken;
     } catch (err) {
-        console.error('[ShipRocket Auth Error]', err.response?.data || err.message);
-        throw new Error('Authentication failed');
+        // Invalidate any stale cached token so the next call retries auth
+        srToken = null;
+        tokenExpiry = null;
+        const detail = err.response?.data || err.message;
+        console.error('[ShipRocket Auth Error]', detail);
+        throw new Error(`ShipRocket authentication failed: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`);
     }
 }
 
@@ -47,22 +56,52 @@ async function createOrder(orderPayload) {
     }
 }
 
-async function checkServiceability(pickupPincode, deliveryPincode, weight, cod = 0) {
-    const token = await getAuthToken();
+async function checkServiceability(pickupPincode, deliveryPincode, weight, length = 10, breadth = 10, height = 10, cod = 0, declaredValue = 0) {
     try {
+        const token = await getAuthToken();
+
+        const params = {
+            pickup_postcode: String(pickupPincode).trim(),
+            delivery_postcode: String(deliveryPincode).trim(),
+            cod: Number(cod) || 0,
+            weight: Number(weight) || 0.5,
+            length: Number(length) || 10,
+            breadth: Number(breadth) || 10,
+            height: Number(height) || 10,
+            is_return: 0
+        };
+
+        if (declaredValue && Number(declaredValue) > 0) {
+            params.declared_value = Number(declaredValue);
+        }
+
+        console.log('[ShipRocket Serviceability] Request Params:', JSON.stringify(params));
+
         const response = await axios.get(`${SHIPROCKET_API_BASE}/courier/serviceability/`, {
-            params: {
-                pickup_postcode: pickupPincode,
-                delivery_postcode: deliveryPincode,
-                cod,
-                weight
-            },
+            params,
             headers: { Authorization: `Bearer ${token}` }
         });
+
+        // Log every courier returned so we can debug rate differences
+        const couriers = response.data?.data?.available_courier_companies || [];
+        if (couriers.length > 0) {
+            console.log(`[ShipRocket Serviceability] ${couriers.length} couriers returned:`);
+            couriers.forEach((c, i) => {
+                console.log(`  [${i + 1}] ${c.courier_name} | rate:${c.rate} | freight_charge:${c.freight_charge} | min_weight:${c.min_weight} | charge_weight:${c.charge_weight}`);
+            });
+        } else {
+            console.warn('[ShipRocket Serviceability] No couriers returned in response.');
+        }
+
         return response.data;
     } catch (err) {
-        console.error('[ShipRocket Serviceability Error]', err.response?.data || err.message);
-        throw err.response?.data || err.message;
+        const detail = err.response?.data || err.message;
+        console.error('[ShipRocket Serviceability Error]', detail);
+        return {
+            status: err.response?.status || 500,
+            error: true,
+            message: typeof detail === 'object' ? JSON.stringify(detail) : detail
+        };
     }
 }
 

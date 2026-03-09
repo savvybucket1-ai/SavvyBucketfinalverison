@@ -101,16 +101,45 @@ router.post('/create-order', auth(['seller', 'admin']), async (req, res) => {
         const billingFirstName = nameParts[0] || 'Customer';
         const billingLastName = nameParts.slice(1).join(' ') || 'User';
 
-        // Determine Pickup Location Nickname
-        // Priority: 1. Override from request (seller typed it in modal), 2. Seller profile nickname, 3. Global env, 4. 'Primary'
+        // Priority: 1. Override from request (seller typed it in modal), 2. Seller profile nickname, 3. Registered pickup address name, 4. Global env, 5. empty string
         const pickupLocation = (pickupLocationOverride && pickupLocationOverride.trim())
             || seller.shiprocketNickname
+            || seller.pickupAddressDetails?.locationName
             || process.env.SHIPROCKET_PICKUP_LOCATION
-            || 'Primary';
+            || ''; // Omit 'Primary' default so ShipRocket uses account default instead of throwing an error for an unknown location
         console.log('[ShipRocket] Using pickup location:', pickupLocation);
 
         // Make order_id unique per attempt: append timestamp so retries don't hit "duplicate order" in ShipRocket
         const srOrderId = `${order._id.toString()}-${Date.now()}`;
+
+        // Extract weight and dimensions from product if not provided in request
+        let finalWeight = parseFloat(weight);
+        let finalLength = parseFloat(length);
+        let finalBreadth = parseFloat(breadth);
+        let finalHeight = parseFloat(height);
+
+        if (!finalWeight || !finalLength || !finalBreadth || !finalHeight) {
+            let pWeight = order.productId.weight || 0.5;
+            let pLength = order.productId.dimensions?.length || 10;
+            let pBreadth = order.productId.dimensions?.breadth || 10;
+            let pHeight = order.productId.dimensions?.height || 10;
+
+            if (order.productId.tieredPricing && order.productId.tieredPricing.length > 0) {
+                const sorted = [...order.productId.tieredPricing].sort((a, b) => b.moq - a.moq);
+                const tier = sorted.find(t => order.quantity >= t.moq);
+                if (tier) {
+                    if (tier.weight) pWeight = tier.weight;
+                    if (tier.length) pLength = tier.length;
+                    if (tier.breadth) pBreadth = tier.breadth;
+                    if (tier.height) pHeight = tier.height;
+                }
+            }
+
+            if (!finalWeight) finalWeight = pWeight * (order.quantity || 1);
+            if (!finalLength) finalLength = pLength;
+            if (!finalBreadth) finalBreadth = pBreadth;
+            if (!finalHeight) finalHeight = pHeight;
+        }
 
         const payload = {
             order_id: srOrderId,
@@ -130,10 +159,10 @@ router.post('/create-order', auth(['seller', 'admin']), async (req, res) => {
             order_items: orderItems,
             payment_method: 'Prepaid',
             sub_total: order.totalAmount,
-            length: parseFloat(length) || 10,
-            breadth: parseFloat(breadth) || 10,
-            height: parseFloat(height) || 10,
-            weight: parseFloat(weight) || 0.5
+            length: finalLength,
+            breadth: finalBreadth,
+            height: finalHeight,
+            weight: finalWeight
         };
 
         console.log('[ShipRocket] Payload:', JSON.stringify(payload));
@@ -210,11 +239,108 @@ router.post('/create-order', auth(['seller', 'admin']), async (req, res) => {
 // Calculate Shipping Cost (Serviceability)
 router.post('/check-serviceability', auth(['seller', 'admin']), async (req, res) => {
     try {
-        const { pickupPincode, deliveryPincode, weight, cod } = req.body;
-        const data = await shiprocket.checkServiceability(pickupPincode, deliveryPincode, weight, cod ? 1 : 0);
+        const { pickupPincode, deliveryPincode, weight, length, breadth, height, cod } = req.body;
+        const data = await shiprocket.checkServiceability(
+            pickupPincode, 
+            deliveryPincode, 
+            weight, 
+            length, 
+            breadth, 
+            height, 
+            cod ? 1 : 0
+        );
+        if (data.error) {
+            return res.status(data.status || 500).json({ message: data.message });
+        }
         res.json(data);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * @api {post} /api/shipments/calculate-rates Calculate Shipping Rates
+ * @apiDescription Get detailed shipping rates from Shiprocket for given parameters
+ * @apiAccess buyer, seller, admin
+ */
+router.post('/calculate-rates', auth(['buyer', 'seller', 'admin']), async (req, res) => {
+    try {
+        const { 
+            pickupPincode, 
+            deliveryPincode, 
+            weight, 
+            length = 10, 
+            breadth = 10, 
+            height = 10, 
+            cod = 0,
+            isLogisticsPage = false // flag to return full data for admin/seller logistics view
+        } = req.body;
+
+        if (!pickupPincode || !deliveryPincode || !weight) {
+            return res.status(400).json({ message: 'Pickup Pincode, Delivery Pincode, and Weight are required' });
+        }
+
+        const data = await shiprocket.checkServiceability(
+            pickupPincode, 
+            deliveryPincode, 
+            weight, 
+            length, 
+            breadth, 
+            height, 
+            cod
+        );
+
+        if (data.error || data.status !== 200) {
+            return res.status(data.status || 400).json({ message: data.message || 'Shiprocket serviceability check failed', data });
+        }
+
+        // If it's a simple request (like from cart), we might just want the cheapest or a summary
+        // For admin/seller logistics page, return everything
+        if (isLogisticsPage) {
+            return res.json(data.data);
+        }
+
+        const couriers = data.data.available_courier_companies;
+        if (!couriers || couriers.length === 0) {
+            return res.status(404).json({ message: 'No shipping service available for this route' });
+        }
+
+        // Find cheapest and fastest options
+        const cheapest = couriers.reduce((prev, curr) => (prev.rate < curr.rate) ? prev : curr);
+        const fastest = couriers.reduce((prev, curr) => {
+            const prevDays = parseInt(prev.etd_hours) || 999;
+            const currDays = parseInt(curr.etd_hours) || 999;
+            return (prevDays < currDays) ? prev : curr;
+        });
+
+        res.json({
+            success: true,
+            total_couriers: couriers.length,
+            cheapest: {
+                name: cheapest.courier_name,
+                rate: Math.ceil(cheapest.rate),
+                etd: cheapest.etd
+            },
+            fastest: {
+                name: fastest.courier_name,
+                rate: Math.ceil(fastest.rate),
+                etd: fastest.etd
+            },
+            all_couriers: couriers.map(c => ({
+                id: c.courier_company_id,
+                name: c.courier_name,
+                rate: Math.ceil(c.rate),
+                etd: c.etd,
+                rating: c.rating
+            }))
+        });
+
+    } catch (err) {
+        console.error('[Calculate Rates Error]', err);
+        res.status(500).json({ 
+            error: 'Failed to calculate shipping rates', 
+            details: err.message || err 
+        });
     }
 });
 

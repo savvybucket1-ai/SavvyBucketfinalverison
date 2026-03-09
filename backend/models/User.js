@@ -40,7 +40,22 @@ const userSchema = new mongoose.Schema({
         accountName: { type: String },
         ifscCode: { type: String }
     },
-    isSellerApproved: { type: Boolean, default: false }
+    isSellerApproved: { type: Boolean, default: false },
+
+    // Buyer Specific Fields
+    shippingAddress: {
+        fullName: { type: String },
+        addressLine1: { type: String },
+        addressLine2: { type: String },
+        city: { type: String },
+        state: { type: String },
+        pinCode: { type: String },
+        phone: { type: String },
+        alternatePhone: { type: String },
+        addressType: { type: String },
+        landmark: { type: String },
+        country: { type: String }
+    }
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

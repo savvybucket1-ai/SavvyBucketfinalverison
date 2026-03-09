@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { login } from '../utils/auth';
 
 const Login = () => {
@@ -7,6 +7,10 @@ const Login = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+
+    // Show a friendly banner when redirected due to an expired session
+    const sessionExpired = searchParams.get('reason') === 'session_expired';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -26,6 +30,17 @@ const Login = () => {
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-bold text-slate-800">Welcome Back</h2>
                 </div>
+
+                {/* Session Expired Banner */}
+                {sessionExpired && !error && (
+                    <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl mb-5 text-sm">
+                        <span className="text-xl leading-none">⏱️</span>
+                        <div>
+                            <p className="font-bold">Your session has expired</p>
+                            <p className="text-amber-700 font-medium mt-0.5">Please sign in again to continue shopping.</p>
+                        </div>
+                    </div>
+                )}
 
                 {error && <div className="bg-red-100 text-red-600 p-3 rounded-lg mb-4 text-sm">{error}</div>}
 
@@ -66,7 +81,6 @@ const Login = () => {
                     <p className="text-slate-600">
                         Don't have an account? <Link to="/register" className="text-primary font-medium hover:underline">Register here</Link>
                     </p>
-
                 </div>
             </div>
         </div>
