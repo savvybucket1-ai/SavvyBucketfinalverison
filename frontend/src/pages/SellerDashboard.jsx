@@ -194,8 +194,10 @@ const fetchOrders = async () => {
             }
             data.append('sellerPrice', derivedSellerPrice);
 
-            // Append new files
+            // Append new files and existing images references
             selectedFiles.forEach(file => data.append('images', file));
+            data.append('existingImages', JSON.stringify(previews.filter(p => p.startsWith('http'))));
+
 
             const isFirstProduct = products.length === 0 && !isEdit;
 
@@ -520,12 +522,20 @@ const fetchOrders = async () => {
                                                         {p.status === 'rejected' && <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg text-red-600 bg-red-50">Rejected</span>}
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
-                                                        <button
-                                                            onClick={() => handleUpdateStock(p._id, p.isAvailable, p.stock)}
-                                                            className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase transition shadow-sm border ${p.isAvailable ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
-                                                        >
-                                                            {p.isAvailable ? 'Out of Stock' : 'In Stock'}
-                                                        </button>
+                                                        <div className="flex flex-col gap-2 items-center justify-center">
+                                                            <button
+                                                                onClick={() => handleEditClick(p)}
+                                                                className="px-3 py-1 text-[10px] font-black uppercase rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition border border-blue-100 shadow-sm w-full max-w-[100px]"
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleUpdateStock(p._id, p.isAvailable, p.stock)}
+                                                                className={`px-3 py-1 w-full max-w-[100px] rounded-lg text-[10px] font-black uppercase transition shadow-sm border ${p.isAvailable ? 'bg-red-50 text-red-600 border-red-100 hover:bg-red-100' : 'bg-green-50 text-green-600 border-green-100 hover:bg-green-100'}`}
+                                                            >
+                                                                {p.isAvailable ? 'Out of Stock' : 'In Stock'}
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             )) : (

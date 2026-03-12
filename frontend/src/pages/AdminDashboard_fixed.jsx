@@ -284,7 +284,7 @@ const AdminDashboard = () => {
             variations: product.variations || [],
             tieredPricing: (product.tieredPricing || []).map(t => ({ ...t })),
             prices: {
-                IN: (typeof product.adminPrice === 'object' ? product.adminPrice?.IN : typeof product.adminPrice === 'number' ? product.adminPrice : '') || '',
+                IN: product.adminPrice?.IN || '',
                 US: product.adminPrice?.US || '',
                 UK: product.adminPrice?.UK || '',
                 CA: product.adminPrice?.CA || '',
@@ -467,7 +467,7 @@ const AdminDashboard = () => {
                                             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Total Revenue</h3>
                                             <DollarSign className="text-green-600" size={24} />
                                         </div>
-                                        <div className="text-3xl font-black text-slate-800">&#8377;{dashboardStats?.totalRevenue?.toLocaleString() || 0}</div>
+                                        <div className="text-3xl font-black text-slate-800">₹{dashboardStats?.totalRevenue?.toLocaleString() || 0}</div>
                                         {dashboardStats?.monthlyGrowth?.revenue !== undefined && (
                                             <div className={`text-xs mt-2 flex items-center ${dashboardStats.monthlyGrowth.revenue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                 {dashboardStats.monthlyGrowth.revenue >= 0 ? <TrendingUp size={14} className="mr-1" /> : <TrendingDown size={14} className="mr-1" />}
@@ -480,7 +480,7 @@ const AdminDashboard = () => {
                                             <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Admin Commission</h3>
                                             <BadgePercent className="text-purple-600" size={24} />
                                         </div>
-                                        <div className="text-3xl font-black text-slate-800">&#8377;{dashboardStats?.totalCommission?.toLocaleString() || 0}</div>
+                                        <div className="text-3xl font-black text-slate-800">₹{dashboardStats?.totalCommission?.toLocaleString() || 0}</div>
                                         <div className="text-xs mt-2 text-slate-500">From all completed orders</div>
                                     </div>
                                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 cursor-pointer hover:scale-[1.02] transition" onClick={() => navigate('/admin/approved-products')}>
@@ -514,7 +514,7 @@ const AdminDashboard = () => {
                                                         <tr key={idx} className="hover:bg-slate-50 transition">
                                                             <td className="px-6 py-4 font-black text-slate-800">#{ord._id.slice(-6)}</td>
                                                             <td className="px-6 py-4 text-slate-500 font-bold whitespace-nowrap">{ord.buyerId?.name || 'Customer'}</td>
-                                                            <td className="px-6 py-4 font-black text-slate-700">&#8377;{ord.totalAmount}</td>
+                                                            <td className="px-6 py-4 font-black text-slate-700">₹{ord.totalAmount}</td>
                                                             <td className="px-6 py-4 text-right">
                                                                 <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-lg ${ord.logisticsStatus === 'delivered' ? 'text-green-600 bg-green-50' :
                                                                     ord.logisticsStatus === 'dispatched' ? 'text-blue-600 bg-blue-50' :
@@ -611,7 +611,7 @@ const AdminDashboard = () => {
                                                     <td className="px-6 py-4 text-center">
                                                         <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-slate-700">&#8377;{p.sellerPrice}</td>
+                                                    <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.sellerPrice}</td>
                                                     <td className="px-6 py-4 text-center font-bold text-slate-700">{p.moq}</td>
                                                     <td className="px-6 py-4 text-right">
                                                         <button
@@ -923,7 +923,7 @@ const AdminDashboard = () => {
                                                         <td className="py-2 text-sm font-black text-slate-700">{tp.moq}</td>
                                                         <td className="py-1">
                                                             <div className="relative max-w-[80px]">
-                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">&#8377;</span>
+                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-[10px]">₹</span>
                                                                 <input
                                                                     type="number"
                                                                     className="w-full pl-5 pr-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
@@ -1123,7 +1123,7 @@ const AdminDashboard = () => {
                             {/* Country-Wise Prices */}
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Country Prices</label>
-                                {[{code:'IN',symbol:'\u20B9'},{code:'US',symbol:'$'},{code:'UK',symbol:'\u00A3'},{code:'CA',symbol:'C$'},{code:'AU',symbol:'A$'},{code:'UAE',symbol:'AED'}].map(country => (
+                                {[{code:'IN',symbol:'₹'},{code:'US',symbol:'$'},{code:'UK',symbol:'Â£'},{code:'CA',symbol:'C$'},{code:'AU',symbol:'A$'},{code:'UAE',symbol:'AED'}].map(country => (
                                     <div key={country.code} className="flex items-center mb-2">
                                         <span className="w-10 text-xs font-bold text-slate-500">{country.code}</span>
                                         <div className="relative flex-1">
@@ -1166,7 +1166,7 @@ const AdminDashboard = () => {
                                             <thead className="text-[9px] font-black uppercase text-slate-400">
                                                 <tr>
                                                     <th className="pb-1 pr-2">MOQ</th>
-                                                    <th className="pb-1">Price (&#8377;)</th>
+                                                    <th className="pb-1">Price (₹)</th>
                                                     <th className="pb-1">L</th>
                                                     <th className="pb-1">B</th>
                                                     <th className="pb-1">H</th>
@@ -1254,7 +1254,7 @@ const AdminOrdersView = ({ orders }) => {
                             <tr key={o._id} className="hover:bg-slate-50 transition">
                                 <td className="px-6 py-4 font-mono text-[10px] text-slate-400">#{o._id.substring(o._id.length - 8)}</td>
                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{o.productId?.title || 'Unknown'}</td>
-                                <td className="px-6 py-4 text-center font-bold text-slate-700">&#8377;{o.totalAmount}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{o.totalAmount}</td>
                                 <td className="px-6 py-4 text-center">
                                     <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${o.logisticsStatus === 'delivered' ? 'bg-green-100 text-green-600' :
                                         o.logisticsStatus === 'dispatched' ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
@@ -1324,7 +1324,7 @@ const SellersView = ({ sellers, handleToggleBlock }) => {
                                 <td className="px-6 py-4 font-bold text-slate-700">{seller.name}</td>
                                 <td className="px-6 py-4 text-slate-500">{seller.email}</td>
                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{seller.productCount || 0}</td>
-                                <td className="px-6 py-4 text-center font-black text-green-600">&#8377;{seller.totalEarnings || 0}</td>
+                                <td className="px-6 py-4 text-center font-black text-green-600">₹{seller.totalEarnings || 0}</td>
                                 <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                                     <button
                                         onClick={() => setSelectedSeller(seller)}
@@ -1504,7 +1504,7 @@ const BuyersView = ({ buyers }) => {
                                 <td className="px-6 py-4 font-bold text-slate-700">{buyer.name}</td>
                                 <td className="px-6 py-4 text-slate-500">{buyer.email}</td>
                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{buyer.totalOrders || 0}</td>
-                                <td className="px-6 py-4 text-center font-black text-green-600">&#8377;{buyer.totalSpent?.toLocaleString() || 0}</td>
+                                <td className="px-6 py-4 text-center font-black text-green-600">₹{buyer.totalSpent?.toLocaleString() || 0}</td>
                                 <td className="px-6 py-4 text-center text-slate-500 text-xs">
                                     {new Date(buyer.createdAt).toLocaleDateString()}
                                 </td>
@@ -1571,7 +1571,7 @@ const ApprovedProductsView = ({ products, onToggleTrending, onEdit }) => {
                                 <td className="px-6 py-4 text-center">
                                     <span className="font-semibold text-slate-500">{p.sellerId?.name || 'Unknown'}</span>
                                 </td>
-                                <td className="px-6 py-4 text-center font-bold text-slate-700">&#8377;{p.adminPrice?.IN || 0}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-700">₹{p.adminPrice?.IN || 0}</td>
                                 <td className="px-6 py-4 text-center font-bold text-slate-700">{p.stock}</td>
                                 <td className="px-6 py-4 text-center">
                                     <button
@@ -1631,7 +1631,7 @@ const OrdersView = ({ orders }) => {
                                     <div className="text-[10px] text-slate-400">Qty: {order.quantity}</div>
                                 </td>
                                 <td className="px-6 py-4 font-bold text-slate-600">{order.buyerId?.name || 'Unknown'}</td>
-                                <td className="px-6 py-4 text-right font-black text-slate-700">&#8377;{order.totalAmount}</td>
+                                <td className="px-6 py-4 text-right font-black text-slate-700">₹{order.totalAmount}</td>
                                 <td className="px-6 py-4 text-center">
                                     <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${order.orderStatus === 'delivered' ? 'bg-green-100 text-green-600' :
                                         order.orderStatus === 'cancelled' ? 'bg-red-100 text-red-600' :
@@ -1713,9 +1713,9 @@ const PayoutsView = () => {
                                         <div className="font-bold text-slate-700">{seller.name || 'Unknown'}</div>
                                         <button onClick={() => setSelectedSeller(seller)} className="text-[10px] text-blue-500 font-bold hover:underline">View Account</button>
                                     </td>
-                                    <td className="px-6 py-4 text-right font-bold text-slate-700">&#8377;{order.totalAmount}</td>
-                                    <td className="px-6 py-4 text-right font-bold text-blue-600">&#8377;{order.sellerEarning}</td>
-                                    <td className="px-6 py-4 text-right font-bold text-green-600">&#8377;{profit}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-slate-700">₹{order.totalAmount}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-blue-600">₹{order.sellerEarning}</td>
+                                    <td className="px-6 py-4 text-right font-bold text-green-600">₹{profit}</td>
                                     <td className="px-6 py-4 text-center">
                                         <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${order.sellerPayoutStatus === 'paid' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
                                             {order.sellerPayoutStatus}

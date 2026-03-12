@@ -119,13 +119,30 @@ router.put('/seller/update/:id', auth(['seller']), upload.array('images', 10), a
             status: 'pending' // Reset to pending after update for re-approval
         };
 
+        let existingImages = [];
+        if (req.body.existingImages) {
+            try {
+                existingImages = JSON.parse(req.body.existingImages);
+            } catch (err) {
+                existingImages = [];
+            }
+        }
+
+        let newImageUrls = [];
         if (req.files && req.files.length > 0) {
-            const newImageUrls = req.files.map(file => {
+            newImageUrls = req.files.map(file => {
                 if (file.path && file.path.startsWith('http')) return file.path;
                 const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
                 return baseUrl + file.filename;
             });
-            updateData.imageUrls = newImageUrls; // Overwrite or could append, but usually overwrite is simpler for basic update
+        }
+
+        // If 'existingImages' field was sent at all, overwrite with the combination
+        // so that removal of old images is recognized by the database.
+        if (req.body.existingImages !== undefined) {
+             updateData.imageUrls = [...existingImages, ...newImageUrls];
+        } else if (newImageUrls.length > 0) {
+             updateData.imageUrls = newImageUrls;
         }
 
         const product = await Product.findOneAndUpdate(
@@ -373,6 +390,80 @@ router.patch('/admin/toggle-trending/:id', auth(['admin']), async (req, res) => 
 
         product.isTrending = !product.isTrending;
         await product.save();
+        res.json(product);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: Update product details (without changing status)
+router.put('/admin/update/:id', auth(['admin']), async (req, res) => {
+    try {
+        let {
+            title, description, category, subCategory, moq, stock,
+            hsnCode, gstPercentage, commission, adminPrice,
+            variations, tieredPricing, imageUrls, weight, length, breadth, height
+        } = req.body;
+
+        if (typeof variations === 'string') {
+            try { variations = JSON.parse(variations); } catch (e) { variations = []; }
+        }
+        if (typeof tieredPricing === 'string') {
+            try { tieredPricing = JSON.parse(tieredPricing); } catch (e) { tieredPricing = []; }
+        }
+
+        if (hsnCode && String(hsnCode).length < 6) {
+            return res.status(400).json({ error: 'HSN Code must be at least 6 digits' });
+        }
+
+        const updateData = {
+            title, description, category, subCategory,
+            moq: Number(moq) || 1,
+            stock: Number(stock) || 0,
+            hsnCode: hsnCode ? String(hsnCode) : undefined,
+            gstPercentage: Number(gstPercentage) || 0,
+            commission: Number(commission) || 0,
+            weight: Number(weight) || undefined,
+            dimensions: { length: Number(length), breadth: Number(breadth), height: Number(height) },
+        };
+
+        // Build country-wise adminPrice
+        if (adminPrice && typeof adminPrice === 'object') {
+            updateData.adminPrice = {
+                IN: Number(adminPrice.IN) || 0,
+                US: Number(adminPrice.US) || 0,
+                UK: Number(adminPrice.UK) || 0,
+                CA: Number(adminPrice.CA) || 0,
+                AU: Number(adminPrice.AU) || 0,
+                UAE: Number(adminPrice.UAE) || 0,
+            };
+        }
+
+        if (variations) updateData.variations = variations;
+        if (imageUrls) updateData.imageUrls = imageUrls;
+
+        if (tieredPricing && tieredPricing.length > 0) {
+            updateData.tieredPricing = tieredPricing.map(t => ({
+                moq: Number(t.moq) || 1,
+                price: Number(t.price) || 0,
+                length: Number(t.length) || 0,
+                breadth: Number(t.breadth || t.width) || 0,
+                height: Number(t.height) || 0,
+                weight: Number(t.weight) || 0
+            }));
+
+            const baseTier = [...updateData.tieredPricing].sort((a, b) => a.moq - b.moq)[0];
+            if (baseTier) {
+                if (baseTier.weight) updateData.weight = baseTier.weight;
+                updateData.dimensions = { length: baseTier.length, breadth: baseTier.breadth, height: baseTier.height };
+            }
+        }
+
+        // Remove undefined keys so $set doesn't overwrite with undefined
+        Object.keys(updateData).forEach(k => updateData[k] === undefined && delete updateData[k]);
+
+        const product = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('sellerId', 'name email');
+        if (!product) return res.status(404).json({ message: 'Product not found' });
         res.json(product);
     } catch (err) {
         res.status(500).json({ error: err.message });
