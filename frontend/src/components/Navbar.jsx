@@ -46,10 +46,13 @@ const Navbar = () => {
         }
     };
 
-    const navItems = categories.map(cat => ({
-        name: cat.name,
-        link: `/category/${cat.name}`
-    }));
+    const navItems = [
+        { name: 'Ship from China', link: '/ship-from-china', icon: true },
+        ...categories.map(cat => ({
+            name: cat.name,
+            link: `/category/${cat.name}`
+        }))
+    ];
 
     return (
         <header className="bg-white sticky top-0 z-50 shadow-sm border-b border-slate-100">
@@ -130,9 +133,13 @@ const Navbar = () => {
                 <div className="max-w-[1440px] mx-auto px-6 overflow-x-auto no-scrollbar">
                     <ul className="flex items-center gap-8 h-12 whitespace-nowrap">
                         {navItems.map((item, idx) => (
-                            <li key={idx}>
-                                <Link to={item.link} className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors">
-                                    <span className="text-sm font-semibold text-slate-700">{item.name}</span>
+                            <li key={idx} className={item.icon ? "border-r border-slate-200 pr-8" : ""}>
+                                <Link 
+                                    to={item.link} 
+                                    className={`flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors ${item.icon ? 'text-primary font-black uppercase text-[11px] tracking-wider' : 'text-sm font-semibold text-slate-700'}`}
+                                >
+                                    {item.icon && <MapPin size={16} />}
+                                    <span>{item.name}</span>
                                     {item.hasDropdown && <ChevronDown size={14} className="text-slate-400" />}
                                 </Link>
                             </li>

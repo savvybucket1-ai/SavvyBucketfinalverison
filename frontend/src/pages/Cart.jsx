@@ -18,6 +18,7 @@ const Cart = () => {
     const [calculatingShipping, setCalculatingShipping] = useState(false);
     const [shippingBreakdown, setShippingBreakdown] = useState([]);
     const [isInternationalShipping, setIsInternationalShipping] = useState(false);
+    const [isInvalidShipping, setIsInvalidShipping] = useState(false);
 
     const [shippingAddress, setShippingAddress] = useState({
         fullName: user?.name || '',
@@ -164,6 +165,7 @@ const Cart = () => {
 
             const isIntl = res.data.is_international || false;
             setIsInternationalShipping(isIntl);
+            setIsInvalidShipping(res.data.isInvalidShipping || false);
             setShippingBreakdown(res.data.breakdowns || []);
 
             // Fee is always returned in INR — convert to local currency
@@ -340,7 +342,19 @@ const Cart = () => {
                             </div>
                         </div>
 
-                        {shippingFee > 0 && (
+                        {isInvalidShipping && (
+                            <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-start gap-3">
+                                <div className="bg-amber-100 p-1.5 rounded-lg text-amber-600 flex-shrink-0 mt-0.5">
+                                    <ShieldCheck size={14} />
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[10px] font-black text-amber-800 uppercase tracking-wider">Invalid Shipping Parameters</p>
+                                    <p className="text-[10px] font-bold text-amber-600 leading-normal uppercase">Shipping charge will be told via call (Seller has not provided product dimensions)</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {!isInvalidShipping && shippingFee > 0 && (
                             <div className="space-y-2">
                                 <div className="flex justify-between text-primary font-bold">
                                     <span className="flex items-center gap-1">

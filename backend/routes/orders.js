@@ -45,9 +45,6 @@ router.post('/calculate-shipping', auth(['buyer', 'seller', 'admin']), async (re
         const destinationCountry = (shippingAddress?.country || 'India').trim();
         const isInternational = destinationCountry !== 'India';
 
-        // For domestic India: sanitize to 6-digit pincode
-        // For international: Shiprocket does NOT support international serviceability via pincode API,
-        // so we apply a flat international shipping rate based on weight.
         const cleanDeliveryPincode = isInternational
             ? deliveryPincode
             : deliveryPincode.toString().replace(/\D/g, '').slice(0, 6);
@@ -59,6 +56,7 @@ router.post('/calculate-shipping', auth(['buyer', 'seller', 'admin']), async (re
         let totalShippingFees = 0;
         const breakdowns = [];
         const groups = {};
+        let isInvalidShipping = false;
 
         // 1. Group items by pickup pincode, collecting full product details
         for (const item of items) {
@@ -66,6 +64,11 @@ router.post('/calculate-shipping', auth(['buyer', 'seller', 'admin']), async (re
             if (!product) {
                 console.warn(`[Shipping Calc] Product not found: ${item.productId}`);
                 continue;
+            }
+
+            // CHECK FOR MISSING DIMENSIONS - If missing, mark as invalid shipping
+            if (!product.dimensions?.length || !product.dimensions?.breadth || !product.dimensions?.height) {
+                isInvalidShipping = true;
             }
 
             const seller = await User.findById(product.sellerId);
@@ -92,15 +95,10 @@ router.post('/calculate-shipping', auth(['buyer', 'seller', 'admin']), async (re
             }
 
             // Normalise the weight because sellers often provide weight for the MOQ batch, not per piece.
-            // If MOQ=10, the seller's provided weight is for 10 pieces. 
-            // e.g. Qty 20 / MOQ 10 = 2 batches. Total weight = 2 * batchWeight.
             const ratio = item.quantity / currentMoq;
             const itemTotalWeight = weight * ratio;
             
             const itemUnitPrice = Math.max(1, Math.round((product.adminPrice?.IN || product.sellerPrice || 1)));
-
-            console.log(`[Shipping Calc] Item: ${product.title} | Qty: ${item.quantity} | MOQ: ${currentMoq} | Batches: ${ratio}`);
-            console.log(`[Shipping Calc] BatchWeight: ${weight}kg | BatchDims: ${length}x${breadth}x${height} | TotalItemWeight: ${itemTotalWeight}kg`);
 
             const groupKey = `${item.productId}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -112,17 +110,12 @@ router.post('/calculate-shipping', auth(['buyer', 'seller', 'admin']), async (re
                     breadth: 0,
                     height: 0,
                     totalDeclaredValue: 0,
-                    items: [] // full product info for Shiprocket order_items
+                    items: [] 
                 };
             }
-            // Actual weight
             groups[groupKey].totalWeight += itemTotalWeight;
-
-            // Box dimensions
             groups[groupKey].length = Math.max(groups[groupKey].length, length);
             groups[groupKey].breadth = Math.max(groups[groupKey].breadth, breadth);
-
-            // Stack items vertically depending on how many MOQ batches we have.
             groups[groupKey].height += height * Math.ceil(ratio);
             groups[groupKey].totalDeclaredValue += itemUnitPrice * item.quantity;
             groups[groupKey].items.push({
@@ -138,141 +131,94 @@ router.post('/calculate-shipping', auth(['buyer', 'seller', 'admin']), async (re
         }
 
         // 2. Fetch shipping price from ShipRocket for each individual item (group)
-        for (const groupKey in groups) {
-            const group = groups[groupKey];
-            const pickupPincode = group.pickupPincode;
-            // Calculate volumetric weight
-            const volumetricWeight = (group.length * group.breadth * group.height) / 5000;
+        // Skip calling Shiprocket if any dimension is missing
+        if (!isInvalidShipping) {
+            for (const groupKey in groups) {
+                const group = groups[groupKey];
+                const pickupPincode = group.pickupPincode;
+                const volumetricWeight = (group.length * group.breadth * group.height) / 5000;
+                const chargeableWeight = Math.max(group.totalWeight, volumetricWeight);
 
-            // Courier always uses higher of actual or volumetric
-            const chargeableWeight = Math.max(group.totalWeight, volumetricWeight);
+                group.totalWeight = chargeableWeight;
 
-            console.log(
-                `[Weight Calculation]
-Actual: ${group.totalWeight.toFixed(2)}kg
-Volumetric: ${volumetricWeight.toFixed(2)}kg
-Chargeable: ${chargeableWeight.toFixed(2)}kg`
-            );
-
-            // Replace total weight with chargeable weight
-            group.totalWeight = chargeableWeight;
-            const itemNames = group.items.map(i => i.name).join(', ');
-            console.log(`[ShipRocket Group] Pickup:${pickupPincode} | Drop:${cleanDeliveryPincode} | TotalWeight:${group.totalWeight.toFixed(2)}kg | Declared:₹${group.totalDeclaredValue} | Items: ${itemNames}`);
-
-            if (isInternational) {
-                // Shiprocket doesn't support international pincode serviceability check.
-                // Use flat international rate based on weight.
-                const fee = Math.ceil(INTERNATIONAL_BASE_RATE_INR + (group.totalWeight * INTERNATIONAL_PER_KG_RATE_INR));
-                totalShippingFees += fee;
-                breakdowns.push({
-                    pickupPincode,
-                    group_total_weight: group.totalWeight,
-                    shippingFee: fee,
-                    courier: 'International Courier',
-                    destination_country: destinationCountry,
-                    is_international: true,
-                    declared_value: group.totalDeclaredValue,
-                    items: group.items.map(i => ({ name: i.name, sku: i.sku, units: i.units, selling_price: i.selling_price }))
-                });
-                continue;
-            }
-
-            // Domestic India — call Shiprocket serviceability API
-            try {
-                const serviceability = await shiprocket.checkServiceability(
-                    pickupPincode,
-                    cleanDeliveryPincode,
-                    group.totalWeight,
-                    group.length || 10,
-                    group.breadth || 10,
-                    group.height || 10,
-                    0,                          // cod = 0 (prepaid)
-                    group.totalDeclaredValue    // declared_value — critical for accurate rates
-                );
-
-                let fee = 100;
-                let courier = 'Standard Shipping';
-                let allCouriers = [];
-
-                if (!serviceability.error && serviceability.status === 200 && serviceability.data?.available_courier_companies?.length > 0) {
-                    const couriers = serviceability.data.available_courier_companies;
-
-                    // 'et_total_amount' is the most accurate estimate including all surcharges and taxes.
-                    // If not present, fallback to 'freight_charge' or 'rate'.
-                    const getEffectiveRate = (c) => Number(c.et_total_amount ?? c.freight_charge ?? c.rate ?? 999999);
-                    const getChargeWeight = (c) => Number(c.charge_weight ?? c.min_weight ?? 999);
-
-                    // User requested: "select the services on the base of the closeet weight and not the up weight"
-                    // Find the absolute minimum charge_weight among all returned couriers.
-                    // This prevents us from considering a "20KG Minimum" courier for a 7KG parcel.
-                    const minChargeWeight = Math.min(...couriers.map(getChargeWeight));
-
-                    // Filter: Only keep couriers whose charge_weight is very close to the minimal possible charge weight 
-                    // (Allowing a tiny 10% or +1kg tolerance for minor volumetric differences between couriers)
-                    const closestWeightCouriers = couriers.filter(c => getChargeWeight(c) <= minChargeWeight * 1.5 + 1);
-
-                    // Now sort by rate but ONLY from the closestWeightCouriers
-                    const sorted = [...closestWeightCouriers].sort((a, b) => getEffectiveRate(a) - getEffectiveRate(b));
-                    const cheapest = sorted[0] || couriers.sort((a, b) => getEffectiveRate(a) - getEffectiveRate(b))[0]; // fallback safely
-
-                    fee = Math.ceil(getEffectiveRate(cheapest));
-                    courier = cheapest.courier_name;
-
-                    // Log all couriers for debugging
-                    console.log(`[ShipRocket] All couriers (sorted cheapest first) for ${pickupPincode} → ${cleanDeliveryPincode} @ ${group.totalWeight}kg:`);
-                    sorted.forEach((c, i) => {
-                        console.log(`  [${i + 1}] ${c.courier_name} | total:₹${c.et_total_amount} | freight:₹${c.freight_charge} | rate:₹${c.rate} | min_wt:${c.min_weight}`);
+                if (isInternational) {
+                    const fee = Math.ceil(INTERNATIONAL_BASE_RATE_INR + (group.totalWeight * INTERNATIONAL_PER_KG_RATE_INR));
+                    totalShippingFees += fee;
+                    breakdowns.push({
+                        pickupPincode,
+                        group_total_weight: group.totalWeight,
+                        shippingFee: fee,
+                        courier: 'International Courier',
+                        destination_country: destinationCountry,
+                        is_international: true,
+                        declared_value: group.totalDeclaredValue,
+                        items: group.items.map(i => ({ name: i.name, sku: i.sku, units: i.units, selling_price: i.selling_price }))
                     });
-                    console.log(`[ShipRocket] ✔ Selected: ${courier} @ ₹${fee}`);
-
-                    allCouriers = sorted.map(c => ({
-                        name: c.courier_name,
-                        rate: Math.ceil(getEffectiveRate(c)),
-                        etd: c.etd,
-                        min_weight: c.min_weight
-                    }));
-                } else {
-                    const reason = serviceability.error ? serviceability.message : 'No couriers available';
-                    console.warn(`[ShipRocket] No couriers for Pickup:${pickupPincode} → Drop:${cleanDeliveryPincode}. Reason: ${reason}. Using ₹100 fallback.`);
+                    continue;
                 }
 
-                totalShippingFees += fee;
-                breakdowns.push({
-                    pickupPincode,
-                    group_total_weight: group.totalWeight,
-                    shippingFee: fee,
-                    courier,
-                    destination_country: destinationCountry,
-                    is_international: false,
-                    declared_value: group.totalDeclaredValue,
-                    available_couriers: allCouriers,
-                    items: group.items.map(i => ({ name: i.name, sku: i.sku, units: i.units, selling_price: i.selling_price }))
-                });
-            } catch (err) {
-                // This catch handles unexpected JS errors (e.g. auth failure)
-                console.error(`[ShipRocket] Unexpected error for pickup PIN ${pickupPincode}:`, err.message || err);
-                const fallbackFee = 100;
-                totalShippingFees += fallbackFee;
-                breakdowns.push({
-                    pickupPincode,
-                    group_total_weight: group.totalWeight,
-                    shippingFee: fallbackFee,
-                    courier: 'Fallback Shipping',
-                    destination_country: destinationCountry,
-                    is_international: false,
-                    declared_value: group.totalDeclaredValue,
-                    available_couriers: [],
-                    items: group.items.map(i => ({ name: i.name, sku: i.sku, units: i.units, selling_price: i.selling_price })),
-                    error: `Serviceability check failed: ${err.message || err}`
-                });
+                try {
+                    const serviceability = await shiprocket.checkServiceability(
+                        pickupPincode,
+                        cleanDeliveryPincode,
+                        group.totalWeight,
+                        group.length || 10,
+                        group.breadth || 10,
+                        group.height || 10,
+                        0,
+                        group.totalDeclaredValue
+                    );
+
+                    let fee = 100;
+                    let courier = 'Standard Shipping';
+                    let allCouriers = [];
+
+                    if (!serviceability.error && serviceability.status === 200 && serviceability.data?.available_courier_companies?.length > 0) {
+                        const couriers = serviceability.data.available_courier_companies;
+                        const getEffectiveRate = (c) => Number(c.et_total_amount ?? c.freight_charge ?? c.rate ?? 999999);
+                        const getChargeWeight = (c) => Number(c.charge_weight ?? c.min_weight ?? 999);
+                        const minChargeWeight = Math.min(...couriers.map(getChargeWeight));
+                        const closestWeightCouriers = couriers.filter(c => getChargeWeight(c) <= minChargeWeight * 1.5 + 1);
+                        const sorted = [...closestWeightCouriers].sort((a, b) => getEffectiveRate(a) - getEffectiveRate(b));
+                        const cheapest = sorted[0] || couriers.sort((a, b) => getEffectiveRate(a) - getEffectiveRate(b))[0];
+
+                        fee = Math.ceil(getEffectiveRate(cheapest));
+                        courier = cheapest.courier_name;
+                        allCouriers = sorted.map(c => ({
+                            name: c.courier_name,
+                            rate: Math.ceil(getEffectiveRate(c)),
+                            etd: c.etd,
+                            min_weight: c.min_weight
+                        }));
+                    } 
+
+                    totalShippingFees += fee;
+                    breakdowns.push({
+                        pickupPincode,
+                        group_total_weight: group.totalWeight,
+                        shippingFee: fee,
+                        courier,
+                        destination_country: destinationCountry,
+                        is_international: false,
+                        items: group.items.map(i => ({ name: i.name, sku: i.sku, units: i.units, selling_price: i.selling_price }))
+                    });
+                } catch (err) {
+                    totalShippingFees += 100;
+                    breakdowns.push({
+                        shippingFee: 100,
+                        courier: 'Fallback Shipping',
+                        items: group.items.map(i => ({ name: i.name, sku: i.sku, units: i.units, selling_price: i.selling_price }))
+                    });
+                }
             }
         }
 
         res.json({
-            totalShippingFees,
+            totalShippingFees: isInvalidShipping ? 0 : totalShippingFees,
             currency: 'INR',
             destination_country: destinationCountry,
             is_international: isInternational,
+            isInvalidShipping: isInvalidShipping,
             breakdowns
         });
     } catch (err) {
@@ -456,8 +402,11 @@ router.post('/create-easebuzz-session', auth(['buyer', 'seller', 'admin']), asyn
             groups[groupKey].breadth = Math.max(groups[groupKey].breadth, breadth);
             groups[groupKey].height += height * Math.ceil(ratio);
             // Declared value must be in INR (Shiprocket is India-based)
-            const indianLineAmount = (getGeoPrice(product.adminPrice, 'IN') || sellerUnitPrice) * item.quantity;
-            groups[groupKey].totalDeclaredValue += Math.round(indianLineAmount);
+            // CHECK FOR MISSING DIMENSIONS
+            const hasDimensions = product.dimensions?.length && product.dimensions?.breadth && product.dimensions?.height;
+            if (!hasDimensions) {
+                groups[groupKey].isInvalidShipping = true;
+            }
 
             processedItems.push({
                 ...item,
@@ -486,6 +435,13 @@ router.post('/create-easebuzz-session', auth(['buyer', 'seller', 'admin']), asyn
 
             for (const groupKey in groups) {
                 const group = groups[groupKey];
+
+                if (group.isInvalidShipping) {
+                    console.log(`[Checkout Shipping] Skipping Shiprocket for group ${groupKey} due to missing dimensions.`);
+                    group.shippingFeeForGroup = 0;
+                    continue;
+                }
+
                 const pickupPincode = group.pickupPincode;
 
                 // volumetric weight

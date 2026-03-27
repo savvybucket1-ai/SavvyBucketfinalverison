@@ -6,6 +6,12 @@
             "use": "@vercel/node"
         }
     ],
+    "env": {
+        "CLOUDINARY_CLOUD_NAME": "dailhzwny",
+        "CLOUDINARY_API_KEY": "964214669672913",
+        "CLOUDINARY_API_SECRET": "ugMAP27wh01m0QM7Lu7rFFDTwz8",
+        "CLOUDINARY_URL": "cloudinary://964214669672913:ugMAP27wh01m0QM7Lu7rFFDTwz8@dailhzwny"
+    },
     "routes": [
         {
             "src": "/(.*)",

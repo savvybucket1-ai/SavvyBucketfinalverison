@@ -269,15 +269,23 @@ router.post('/calculate-rates', auth(['buyer', 'seller', 'admin']), async (req, 
             pickupPincode, 
             deliveryPincode, 
             weight, 
-            length = 10, 
-            breadth = 10, 
-            height = 10, 
+            length, 
+            breadth, 
+            height, 
             cod = 0,
-            isLogisticsPage = false // flag to return full data for admin/seller logistics view
+            isLogisticsPage = false 
         } = req.body;
 
-        if (!pickupPincode || !deliveryPincode || !weight) {
-            return res.status(400).json({ message: 'Pickup Pincode, Delivery Pincode, and Weight are required' });
+        if (!pickupPincode || !deliveryPincode) {
+            return res.status(400).json({ message: 'Pickup Pincode and Delivery Pincode are required' });
+        }
+
+        // If weight or any dimension is missing/zero, mark as invalid for Shiprocket
+        if (!weight || !length || !breadth || !height || parseFloat(weight) <= 0 || parseFloat(length) <= 0 || parseFloat(breadth) <= 0 || parseFloat(height) <= 0) {
+            return res.json({ 
+                isInvalidShipping: true, 
+                message: 'Shipping charge will be told via call (Missing weight or dimensions)' 
+            });
         }
 
         const data = await shiprocket.checkServiceability(
@@ -294,8 +302,6 @@ router.post('/calculate-rates', auth(['buyer', 'seller', 'admin']), async (req, 
             return res.status(data.status || 400).json({ message: data.message || 'Shiprocket serviceability check failed', data });
         }
 
-        // If it's a simple request (like from cart), we might just want the cheapest or a summary
-        // For admin/seller logistics page, return everything
         if (isLogisticsPage) {
             return res.json(data.data);
         }
@@ -305,7 +311,6 @@ router.post('/calculate-rates', auth(['buyer', 'seller', 'admin']), async (req, 
             return res.status(404).json({ message: 'No shipping service available for this route' });
         }
 
-        // Find cheapest and fastest options
         const cheapest = couriers.reduce((prev, curr) => (prev.rate < curr.rate) ? prev : curr);
         const fastest = couriers.reduce((prev, curr) => {
             const prevDays = parseInt(prev.etd_hours) || 999;

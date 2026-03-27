@@ -190,72 +190,86 @@ const ShippingCalculator = () => {
 
                     {results && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            {/* Summary Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-[#eff6ff] p-6 rounded-2xl border border-blue-100 relative overflow-hidden group">
-                                    <div className="relative z-10 flex justify-between items-start mb-4">
-                                        <div className="bg-blue-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded">Cheapest</div>
-                                        <IndianRupee size={20} className="text-blue-500" />
+                            {results.isInvalidShipping ? (
+                                <div className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                                        <AlertCircle className="text-amber-500" size={32} />
                                     </div>
-                                    <h4 className="relative z-10 text-2xl font-black text-slate-800">₹{results.cheapest.rate}</h4>
-                                    <p className="relative z-10 text-xs font-bold text-slate-500 mt-1">{results.cheapest.name}</p>
-                                    <div className="relative z-10 text-[10px] font-bold text-blue-600 mt-3 flex items-center">
-                                        <CheckCircle2 size={12} className="mr-1" /> ETD: {results.cheapest.etd}
-                                    </div>
-                                    <Truck size={80} className="absolute right-[-20px] bottom-[-20px] text-blue-200 opacity-20 group-hover:scale-110 transition-transform" />
+                                    <h3 className="font-black text-amber-800 uppercase tracking-tight">Shipping via Call</h3>
+                                    <p className="text-amber-700 text-sm font-bold max-w-xs mt-2 uppercase">
+                                        {results.message || 'Shipping charge will be told via call (Missing weight or dimensions)'}
+                                    </p>
                                 </div>
+                            ) : (
+                                <>
+                                    {/* Summary Cards */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-[#eff6ff] p-6 rounded-2xl border border-blue-100 relative overflow-hidden group">
+                                            <div className="relative z-10 flex justify-between items-start mb-4">
+                                                <div className="bg-blue-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded">Cheapest</div>
+                                                <IndianRupee size={20} className="text-blue-500" />
+                                            </div>
+                                            <h4 className="relative z-10 text-2xl font-black text-slate-800">₹{results.cheapest.rate}</h4>
+                                            <p className="relative z-10 text-xs font-bold text-slate-500 mt-1">{results.cheapest.name}</p>
+                                            <div className="relative z-10 text-[10px] font-bold text-blue-600 mt-3 flex items-center">
+                                                <CheckCircle2 size={12} className="mr-1" /> ETD: {results.cheapest.etd}
+                                            </div>
+                                            <Truck size={80} className="absolute right-[-20px] bottom-[-20px] text-blue-200 opacity-20 group-hover:scale-110 transition-transform" />
+                                        </div>
 
-                                <div className="bg-[#f0fdf4] p-6 rounded-2xl border border-green-100 relative overflow-hidden group">
-                                    <div className="relative z-10 flex justify-between items-start mb-4">
-                                        <div className="bg-green-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded">Fastest</div>
-                                        <Truck size={20} className="text-green-500" />
+                                        <div className="bg-[#f0fdf4] p-6 rounded-2xl border border-green-100 relative overflow-hidden group">
+                                            <div className="relative z-10 flex justify-between items-start mb-4">
+                                                <div className="bg-green-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded">Fastest</div>
+                                                <Truck size={20} className="text-green-500" />
+                                            </div>
+                                            <h4 className="relative z-10 text-2xl font-black text-slate-800">₹{results.fastest.rate}</h4>
+                                            <p className="relative z-10 text-xs font-bold text-slate-500 mt-1">{results.fastest.name}</p>
+                                            <div className="relative z-10 text-[10px] font-bold text-green-600 mt-3 flex items-center">
+                                                <CheckCircle2 size={12} className="mr-1" /> ETD: {results.fastest.etd}
+                                            </div>
+                                            <Truck size={80} className="absolute right-[-20px] bottom-[-20px] text-green-200 opacity-20 group-hover:scale-110 transition-transform" />
+                                        </div>
                                     </div>
-                                    <h4 className="relative z-10 text-2xl font-black text-slate-800">₹{results.fastest.rate}</h4>
-                                    <p className="relative z-10 text-xs font-bold text-slate-500 mt-1">{results.fastest.name}</p>
-                                    <div className="relative z-10 text-[10px] font-bold text-green-600 mt-3 flex items-center">
-                                        <CheckCircle2 size={12} className="mr-1" /> ETD: {results.fastest.etd}
-                                    </div>
-                                    <Truck size={80} className="absolute right-[-20px] bottom-[-20px] text-green-200 opacity-20 group-hover:scale-110 transition-transform" />
-                                </div>
-                            </div>
 
-                            {/* Detailed List */}
-                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                                <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                                    <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Available Couriers</h3>
-                                    <span className="text-[10px] font-bold text-slate-400">{results.total_couriers} PARTNERS FOUND</span>
-                                </div>
-                                <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto custom-scrollbar">
-                                    {results.all_couriers.map((courier, idx) => (
-                                        <div key={idx} className="p-4 hover:bg-slate-50/50 transition flex items-center justify-between">
-                                            <div className="flex items-center space-x-4">
-                                                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400">
-                                                    <Truck size={20} />
-                                                </div>
-                                                <div>
-                                                    <h5 className="font-black text-slate-700 text-sm">{courier.name}</h5>
-                                                    <div className="flex items-center mt-0.5">
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-3">ETD: {courier.etd}</span>
-                                                        <div className="flex items-center">
-                                                            <div className="flex text-yellow-400 mr-1">
-                                                                <IndianRupee size={8} />
+                                    {/* Detailed List */}
+                                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                                        <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                                            <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Available Couriers</h3>
+                                            <span className="text-[10px] font-bold text-slate-400">{results.total_couriers} PARTNERS FOUND</span>
+                                        </div>
+                                        <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto custom-scrollbar">
+                                            {results.all_couriers.map((courier, idx) => (
+                                                <div key={idx} className="p-4 hover:bg-slate-50/50 transition flex items-center justify-between">
+                                                    <div className="flex items-center space-x-4">
+                                                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400">
+                                                            <Truck size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <h5 className="font-black text-slate-700 text-sm">{courier.name}</h5>
+                                                            <div className="flex items-center mt-0.5">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-3">ETD: {courier.etd}</span>
+                                                                <div className="flex items-center">
+                                                                    <div className="flex text-yellow-400 mr-1">
+                                                                        <IndianRupee size={8} />
+                                                                    </div>
+                                                                    <span className="text-[10px] font-black text-slate-500">{courier.rating || 'N/A'}</span>
+                                                                </div>
                                                             </div>
-                                                            <span className="text-[10px] font-black text-slate-500">{courier.rating || 'N/A'}</span>
                                                         </div>
                                                     </div>
+                                                    <div className="text-right text-lg font-black text-slate-800">
+                                                        ₹{courier.rate}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div className="text-right text-lg font-black text-slate-800">
-                                                ₹{courier.rate}
-                                            </div>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
-                                <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center text-slate-400">
-                                    <Info size={14} className="mr-2" />
-                                    <p className="text-[10px] font-bold uppercase tracking-widest">Rates include base weight and fuel surcharge. Regional taxes extra.</p>
-                                </div>
-                            </div>
+                                        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center text-slate-400">
+                                            <Info size={14} className="mr-2" />
+                                            <p className="text-[10px] font-bold uppercase tracking-widest">Rates include base weight and fuel surcharge. Regional taxes extra.</p>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>

@@ -17,11 +17,13 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(cors({
-    origin: '*',
+    origin: ['https://www.savvybucket.com', 'https://savvy-frontend-api.vercel.app', 'http://localhost:5173', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+    credentials: true
 }));
 const os = require('os');
 const path = require('path');
@@ -112,6 +114,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/influencer-videos', require('./routes/influencerVideos'));
+app.use('/api/china-inquiry', require('./routes/chinaInquiry'));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

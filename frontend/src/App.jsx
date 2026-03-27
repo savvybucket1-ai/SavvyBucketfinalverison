@@ -22,6 +22,7 @@ import WishlistPage from './pages/WishlistPage';
 import ProfilePage from './pages/ProfilePage';
 import ReelsPage from './pages/ReelsPage';
 import JustArrived from './pages/JustArrived';
+import ShipFromChina from './pages/ShipFromChina';
 
 
 import MobileBottomNav from './components/MobileBottomNav';
@@ -50,6 +51,7 @@ function AppContent() {
                 <Route path="/" element={<BuyerHome />} />
                 <Route path="/category/:category" element={<CategoryPage />} />
                 <Route path="/just-arrived" element={<JustArrived />} />
+                <Route path="/ship-from-china" element={<ShipFromChina />} />
                 <Route path="/wishlist" element={<WishlistPage />} />
                 <Route path="/product/:id" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
