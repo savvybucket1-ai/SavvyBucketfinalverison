@@ -61,6 +61,7 @@ const AdminDashboard = () => {
     const [commissionInput, setCommissionInput] = useState('');
     const [orders, setOrders] = useState([]);
     const [isChinaCreating, setIsChinaCreating] = useState(false);
+    const [isChinaSubmitting, setIsChinaSubmitting] = useState(false);
     const [chinaImages, setChinaImages] = useState([]);
     const [chinaFormData, setChinaFormData] = useState({
         title: '', description: '', category: '', subCategory: '',
@@ -290,6 +291,8 @@ const AdminDashboard = () => {
             return;
         }
 
+        if (isChinaSubmitting) return;
+        setIsChinaSubmitting(true);
         try {
             const formData = new FormData();
             formData.append('title', chinaFormData.title);
@@ -311,6 +314,7 @@ const AdminDashboard = () => {
             setChinaFormData({ title: '', description: '', category: '', subCategory: '', moq: 1, stock: 1000, adminPrice: { IN: '', US: '', UK: '', CA: '', AU: '', UAE: '', INTL: '' }, imageUrls: [], variations: [], tieredPricing: [], shipFromChina: true });
             fetchApproved(); alert('Product listed successfully!');
         } catch (err) { alert('Listing failed: ' + (err.response?.data?.error || err.message)); }
+        finally { setIsChinaSubmitting(false); }
     };
 
     const handleDeleteProduct = async (productId) => {
@@ -1340,7 +1344,9 @@ const AdminDashboard = () => {
                                     ))}
                                 </div>
                             </div>
-                            <button onClick={handleCreateChinaProduct} className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase text-xs shadow-lg shadow-blue-500/30 hover:bg-blue-600 transition">Submit Product</button>
+                            <button onClick={handleCreateChinaProduct} disabled={isChinaSubmitting} className={`w-full ${isChinaSubmitting ? 'bg-slate-400' : 'bg-primary hover:bg-blue-600'} text-white py-4 rounded-xl font-black uppercase text-xs shadow-lg shadow-blue-500/30 transition`}>
+                                {isChinaSubmitting ? 'Creating Product...' : 'Submit Product'}
+                            </button>
                         </div>
                     </div>
                 </div>
