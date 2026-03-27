@@ -47,10 +47,18 @@ router.post('/seller/add', auth(['seller']), upload.array('images', 10), async (
         });
 
         const product = new Product({
-            title, description, sellerPrice, imageUrls, moq, stock,
-            category, subCategory, hsnCode, gstPercentage, // Added subCategory
-            weight,
-            dimensions: { length, breadth, height },
+            title, description,
+            sellerPrice: Number(sellerPrice) || 0,
+            imageUrls,
+            moq: Number(moq) || 1,
+            stock: Number(stock) || 0,
+            category, subCategory, hsnCode, gstPercentage,
+            weight: Number(weight) || 0,
+            dimensions: {
+                length: Number(length) || 0,
+                breadth: Number(breadth) || 0,
+                height: Number(height) || 0
+            },
             variations,
             tieredPricing,
             sellerId: req.user.id,
@@ -110,10 +118,17 @@ router.put('/seller/update/:id', auth(['seller']), upload.array('images', 10), a
         }
 
         const updateData = {
-            title, description, sellerPrice, moq, stock,
-            category, subCategory, hsnCode, gstPercentage, // Added subCategory
-            weight,
-            dimensions: { length, breadth, height },
+            title, description,
+            sellerPrice: Number(sellerPrice) || 0,
+            moq: Number(moq) || 1,
+            stock: Number(stock) || 0,
+            category, subCategory, hsnCode, gstPercentage,
+            weight: Number(weight) || 0,
+            dimensions: {
+                length: Number(length) || 0,
+                breadth: Number(breadth) || 0,
+                height: Number(height) || 0
+            },
             variations,
             tieredPricing,
             status: 'pending' // Reset to pending after update for re-approval
@@ -140,9 +155,9 @@ router.put('/seller/update/:id', auth(['seller']), upload.array('images', 10), a
         // If 'existingImages' field was sent at all, overwrite with the combination
         // so that removal of old images is recognized by the database.
         if (req.body.existingImages !== undefined) {
-             updateData.imageUrls = [...existingImages, ...newImageUrls];
+            updateData.imageUrls = [...existingImages, ...newImageUrls];
         } else if (newImageUrls.length > 0) {
-             updateData.imageUrls = newImageUrls;
+            updateData.imageUrls = newImageUrls;
         }
 
         const product = await Product.findOneAndUpdate(
@@ -178,10 +193,11 @@ router.get('/:id', async (req, res) => {
 
 // Buyer: Fetch approved products
 // Buyer: Fetch approved products with filters
+// Buyer: Fetch approved products with filters (Excluding Ship from China)
 router.get('/buyer/list', async (req, res) => {
     try {
         const { category, subCategory, search, sort } = req.query;
-        let query = { status: 'approved', isAvailable: true };
+        let query = { status: 'approved', isAvailable: true, shipFromChina: { $ne: true } };
 
         if (category && category !== 'All Categories') {
             query.category = category;
@@ -199,16 +215,15 @@ router.get('/buyer/list', async (req, res) => {
 
         switch (sort) {
             case 'price_low':
-                productsQuery = productsQuery.sort({ adminPrice: 1 });
+                productsQuery = productsQuery.sort({ 'adminPrice.IN': 1 });
                 break;
             case 'price_high':
-                productsQuery = productsQuery.sort({ adminPrice: -1 });
+                productsQuery = productsQuery.sort({ 'adminPrice.IN': -1 });
                 break;
             case 'newest':
                 productsQuery = productsQuery.sort({ createdAt: -1 });
                 break;
             default:
-                // Default sort (e.g. relevance/newest if needed, or no specific sort)
                 break;
         }
 
@@ -219,10 +234,20 @@ router.get('/buyer/list', async (req, res) => {
     }
 });
 
-// Buyer: Fetch Trending Products
+// Buyer: Fetch Ship from China products ONLY
+router.get('/buyer/china-list', async (req, res) => {
+    try {
+        const products = await Product.find({ status: 'approved', isAvailable: true, shipFromChina: true }).populate('sellerId', 'name');
+        res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Buyer: Fetch Trending Products (Excluding Ship from China)
 router.get('/buyer/trending', async (req, res) => {
     try {
-        const products = await Product.find({ status: 'approved', isAvailable: true, isTrending: true }).populate('sellerId', 'name');
+        const products = await Product.find({ status: 'approved', isAvailable: true, isTrending: true, shipFromChina: { $ne: true } }).populate('sellerId', 'name');
         res.json(products);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -266,12 +291,12 @@ router.patch('/admin/toggle-trending/:id', auth(['admin']), async (req, res) => 
     }
 });
 
-// Buyer: Fetch Latest 20 Approved Products (Just Arrived)
+// Buyer: Fetch Latest 20 Approved Products (Just Arrived) (Excluding Ship from China)
 router.get('/buyer/latest', async (req, res) => {
     try {
-        const products = await Product.find({ status: 'approved', isAvailable: true })
-            .sort({ createdAt: -1 }) // Sort by newest first
-            .limit(20) // Limit to 20 products
+        const products = await Product.find({ status: 'approved', isAvailable: true, shipFromChina: { $ne: true } })
+            .sort({ createdAt: -1 })
+            .limit(20)
             .populate('sellerId', 'name');
         res.json(products);
     } catch (err) {
@@ -308,6 +333,7 @@ router.patch('/admin/approve/:id', auth(['admin']), async (req, res) => {
                     CA: Number(adminPrice.CA) || 0,
                     AU: Number(adminPrice.AU) || 0,
                     UAE: Number(adminPrice.UAE) || 0,
+                    INTL: Number(adminPrice.INTL) || 0,
                 };
             } else {
                 // Fallback: if a single number was sent, use it for IN
@@ -319,6 +345,7 @@ router.patch('/admin/approve/:id', auth(['admin']), async (req, res) => {
                     CA: 0,
                     AU: 0,
                     UAE: 0,
+                    INTL: 0,
                 };
             }
             updateData.commission = Number(commission) || 0;
@@ -333,6 +360,7 @@ router.patch('/admin/approve/:id', auth(['admin']), async (req, res) => {
 
             if (variations) updateData.variations = variations;
             if (imageUrls) updateData.imageUrls = imageUrls;
+            if (req.body.shipFromChina !== undefined) updateData.shipFromChina = !!req.body.shipFromChina;
 
             if (tieredPricing && tieredPricing.length > 0) {
                 updateData.tieredPricing = tieredPricing.map(t => ({
@@ -425,6 +453,7 @@ router.put('/admin/update/:id', auth(['admin']), async (req, res) => {
             commission: Number(commission) || 0,
             weight: Number(weight) || undefined,
             dimensions: { length: Number(length), breadth: Number(breadth), height: Number(height) },
+            shipFromChina: req.body.shipFromChina !== undefined ? !!req.body.shipFromChina : undefined
         };
 
         // Build country-wise adminPrice
@@ -436,6 +465,7 @@ router.put('/admin/update/:id', auth(['admin']), async (req, res) => {
                 CA: Number(adminPrice.CA) || 0,
                 AU: Number(adminPrice.AU) || 0,
                 UAE: Number(adminPrice.UAE) || 0,
+                INTL: Number(adminPrice.INTL) || 0,
             };
         }
 
@@ -465,6 +495,67 @@ router.put('/admin/update/:id', auth(['admin']), async (req, res) => {
         const product = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('sellerId', 'name email');
         if (!product) return res.status(404).json({ message: 'Product not found' });
         res.json(product);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: Directly add an approved product (e.g. for Ship from China portal)
+router.post('/admin/add', auth(['admin']), upload.array('images', 10), async (req, res) => {
+    try {
+        let { title, description, category, subCategory, shipFromChina, adminPrice, imageUrls, moq, stock, variations, tieredPricing } = req.body;
+
+        // Parse JSON strings from FormData if necessary
+        if (typeof adminPrice === 'string') { try { adminPrice = JSON.parse(adminPrice); } catch (e) { } }
+        if (typeof variations === 'string') { try { variations = JSON.parse(variations); } catch (e) { } }
+        if (typeof tieredPricing === 'string') { try { tieredPricing = JSON.parse(tieredPricing); } catch (e) { } }
+        if (typeof imageUrls === 'string') { try { imageUrls = JSON.parse(imageUrls); } catch (e) { } }
+
+        // Process uploaded files
+        const uploadedImages = (req.files || []).map(file => {
+            if (file.path && file.path.startsWith('http')) return file.path;
+            const baseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+            return baseUrl + file.filename;
+        });
+
+        // Combine provided URLs (if any) with uploaded file paths
+        const finalImageUrls = [...(Array.isArray(imageUrls) ? imageUrls : []), ...uploadedImages];
+
+        const product = new Product({
+            title, description, category, subCategory,
+            shipFromChina: shipFromChina === undefined ? true : (shipFromChina === 'true' || shipFromChina === true),
+            adminPrice: adminPrice || { IN: 0, US: 0, UK: 0, CA: 0, AU: 0, UAE: 0, INTL: 0 },
+            imageUrls: finalImageUrls,
+            moq: Number(moq) || 1,
+            stock: Number(stock) || 0,
+            variations: variations || [],
+            tieredPricing: tieredPricing || [],
+            status: 'approved',
+            isAvailable: true,
+            sellerId: req.user.id // Admin is the creator
+        });
+
+        if (product.tieredPricing && product.tieredPricing.length > 0) {
+            const baseTier = [...product.tieredPricing].sort((a, b) => a.moq - b.moq)[0];
+            if (baseTier) {
+                product.weight = baseTier.weight;
+                product.dimensions = { length: baseTier.length, breadth: baseTier.breadth, height: baseTier.height };
+            }
+        }
+
+        await product.save();
+        res.status(201).json(product);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// Admin: Delete product
+router.delete('/admin/delete/:id', auth(['admin']), async (req, res) => {
+    try {
+        const product = await Product.findByIdAndDelete(req.params.id);
+        if (!product) return res.status(404).json({ error: 'Product not found' });
+        res.json({ message: 'Product deleted successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -281,6 +281,11 @@ const ProductDetail = () => {
                                                             next[v.name] = val;
                                                             return next;
                                                         });
+
+                                                        // Switch image to match variant index
+                                                        if (product.imageUrls?.length > 0) {
+                                                            setSelectedImage(vIdx % product.imageUrls.length);
+                                                        }
                                                     }}
                                                     className={`px-4 py-2 rounded-lg text-sm font-bold border-2 transition-all ${selectedOptions[v.name] === val
                                                         ? 'border-primary bg-primary/5 text-primary'
@@ -419,7 +424,7 @@ const ProductDetail = () => {
                         {/* Tab Content */}
                         <div className="text-slate-600 text-sm leading-relaxed mb-6">
                             {activeTab === 'description' ? (
-                                <p>{product.description}</p>
+                                <p style={{ whiteSpace: 'pre-wrap' }}>{product.description}</p>
                             ) : (
                                 <div className="space-y-3 mt-4">
                                     {(() => {

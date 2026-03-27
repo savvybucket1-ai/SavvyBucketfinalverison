@@ -41,6 +41,20 @@ const SellerDashboard = () => {
         { name: 'All', count: orders.length }
     ];
 
+    const resetProductForm = () => {
+        setIsEdit(false);
+        setEditId(null);
+        setFormData({
+            title: '', description: '', moq: 1, stock: 0, 
+            category: '', subCategory: '', hsnCode: '', gstPercentage: '', 
+            customCategory: ''
+        });
+        setVariations([]);
+        setTieredPricing([]);
+        setSelectedFiles([]);
+        setPreviews([]);
+    };
+
     const getFilteredOrders = () => {
         switch (activeTab) {
             case 'New': return orders.filter(o => o.logisticsStatus === 'pending');
@@ -155,9 +169,15 @@ const fetchOrders = async () => {
         }
 
         // Validate Images
-        if ( previews.length <3) {
-            alert('Please upload at least three product image.');
+        if (previews.length < 3) {
+            alert('Please upload at least three product images.');
             return;
+        }
+
+        const totalSize = selectedFiles.reduce((acc, file) => acc + file.size, 0);
+        if (totalSize > 4.5 * 1024 * 1024) {
+             alert('Total image size is too large! Please compress your images so the total size is under 4.5MB.');
+             return;
         }
 
         setIsSubmitting(true);
@@ -186,11 +206,12 @@ const fetchOrders = async () => {
                 const sorted = [...tieredPricing].sort((a, b) => a.moq - b.moq);
                 derivedSellerPrice = sorted[0].price;
 
-                // Also set base dimensions/weight from the first tier
-                if (sorted[0].weight) data.append('weight', sorted[0].weight);
-                if (sorted[0].length) data.append('length', sorted[0].length);
-                if (sorted[0].breadth) data.append('breadth', sorted[0].breadth);
-                if (sorted[0].height) data.append('height', sorted[0].height);
+                // Sync base dimensions/weight from the first tier for logistics
+                const baseTier = sorted[0];
+                if (baseTier.weight) data.append('weight', baseTier.weight);
+                if (baseTier.length) data.append('length', baseTier.length);
+                if (baseTier.breadth) data.append('breadth', baseTier.breadth);
+                if (baseTier.height) data.append('height', baseTier.height);
             }
             data.append('sellerPrice', derivedSellerPrice);
 
@@ -213,16 +234,9 @@ const fetchOrders = async () => {
                 });
             }
 
-            setShowAddForm(false);
-            setIsEdit(false);
-            setEditId(null);
-            setFormData({ title: '', description: '', sellerPrice: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' });
-            setVariations([]);
-            setTieredPricing([]);
-            setSelectedFiles([]);
-            setPreviews([]);
+            resetProductForm();
             fetchProducts();
-
+            setShowAddForm(false);
             if (isFirstProduct || !profile?.pickupAddressDetails?.pincode) {
                 setProfileTab('pickup');
                 setShowProfileModal(true);
@@ -246,7 +260,6 @@ const fetchOrders = async () => {
             customCategory: isCustom ? product.category : '',
             hsnCode: product.hsnCode,
             gstPercentage: product.gstPercentage,
-
         });
         setVariations(product.variations ? product.variations.map(v => ({ ...v, values: v.values.join(', ') })) : []);
         setTieredPricing(product.tieredPricing || []);
@@ -386,7 +399,7 @@ const fetchOrders = async () => {
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                                     <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Seller Dashboard</h1>
                                     <button
-                                        onClick={() => { setIsEdit(false); setFormData({ title: '', description: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' }); setVariations([]); setTieredPricing([]); setShowAddForm(true); }}
+                                        onClick={() => { resetProductForm(); setShowAddForm(true); }}
                                         className="bg-primary text-white px-6 py-2.5 rounded-xl font-black uppercase text-xs flex items-center space-x-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 w-full md:w-auto justify-center"
                                     >
                                         <PlusCircle size={18} />
@@ -478,7 +491,7 @@ const fetchOrders = async () => {
                                 <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                     <h3 className="font-black text-slate-800 uppercase tracking-wider text-sm">My Products</h3>
                                     <button
-                                        onClick={() => { setIsEdit(false); setFormData({ title: '', description: '', moq: 1, stock: 0, category: '', subCategory: '', hsnCode: '', gstPercentage: '', customCategory: '' }); setVariations([]); setTieredPricing([]); setShowAddForm(true); }}
+                                        onClick={() => { resetProductForm(); setShowAddForm(true); }}
                                         className="bg-primary text-white px-4 py-2 rounded-lg font-black uppercase text-[10px] flex items-center space-x-2 hover:bg-blue-600 transition shadow-sm shadow-blue-200"
                                     >
                                         <PlusCircle size={14} />
@@ -832,6 +845,7 @@ const fetchOrders = async () => {
                                         value={formData.stock} onChange={e => setFormData({ ...formData, stock: e.target.value })} />
                                 </div>
                             </div>
+
 
 
                             {/* Variations Section */}

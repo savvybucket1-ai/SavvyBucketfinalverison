@@ -1,13 +1,14 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader, getCurrentUser } from '../utils/auth';
-import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video, UserPlus, FileText, CheckCircle, XCircle, Menu, Wallet, Clock, Truck, Edit2, PlusCircle, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, Users, BadgePercent, Search, ChevronRight, User, TrendingUp, TrendingDown, DollarSign, UserCheck, Video, UserPlus, FileText, CheckCircle, XCircle, Menu, Wallet, Clock, Truck, Edit2, PlusCircle, Trash2, Globe } from 'lucide-react';
 import AdminInfluencerVideos from './AdminInfluencerVideos';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/DashboardSidebar';
 import ShippingCalculator from '../components/ShippingCalculator';
 
 import API_BASE_URL from '../config';
+import { categories as CATEGORIES_LIST } from '../utils/categories';
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
@@ -16,7 +17,7 @@ const AdminDashboard = () => {
     const [editingProduct, setEditingProduct] = useState(null);
     const [approvalData, setApprovalData] = useState({
         adminPrice: '',
-        commission: '',
+        commission: '', shipFromChina: false,
         title: '',
         description: '',
         moq: '',
@@ -33,7 +34,8 @@ const AdminDashboard = () => {
             UK: '',
             CA: '',
             AU: '',
-            UAE: ''
+            UAE: '',
+            INTL: ''
         }
     });
 
@@ -58,6 +60,13 @@ const AdminDashboard = () => {
     const [commission, setCommission] = useState('');
     const [commissionInput, setCommissionInput] = useState('');
     const [orders, setOrders] = useState([]);
+    const [isChinaCreating, setIsChinaCreating] = useState(false);
+    const [chinaImages, setChinaImages] = useState([]);
+    const [chinaFormData, setChinaFormData] = useState({
+        title: '', description: '', category: '', subCategory: '',
+        moq: 1, stock: 1000, adminPrice: { IN: '', US: '', UK: '', CA: '', AU: '', UAE: '', INTL: '' },
+        imageUrls: [], variations: [], tieredPricing: [], shipFromChina: true
+    });
 
     const location = useLocation();
 
@@ -209,7 +218,7 @@ const AdminDashboard = () => {
 
     const handleApprove = async (id, status = 'approved') => {
         try {
-            let payload = { ...approvalData, status };
+            let payload = { ...approvalData, status, shipFromChina: approvalData.shipFromChina };
 
             // Ensure numeric fields are correctly typed
             payload.stock = parseInt(payload.stock) || 0;
@@ -249,6 +258,7 @@ const AdminDashboard = () => {
                 CA: parseFloat(payload.prices?.CA) || 0,
                 AU: parseFloat(payload.prices?.AU) || 0,
                 UAE: parseFloat(payload.prices?.UAE) || 0,
+                INTL: parseFloat(payload.prices?.INTL) || 0,
             };
 
             await axios.patch(`${API_BASE_URL}/api/products/admin/approve/${id}`,
@@ -263,10 +273,64 @@ const AdminDashboard = () => {
         }
     };
 
+
+    const handleCreateChinaProduct = async () => {
+        if (!chinaFormData.title || !chinaFormData.description || !chinaFormData.category) {
+            alert('Title, Description and Category are required!');
+            return;
+        }
+        if (!chinaFormData.adminPrice.IN && chinaImages.length === 0 && chinaFormData.imageUrls.length === 0) {
+            alert('Please provide at least a base price and one image.');
+            return;
+        }
+
+        const totalSize = chinaImages.reduce((acc, file) => acc + file.size, 0);
+        if (totalSize > 4.5 * 1024 * 1024) {
+            alert('Image files are too large! Combined size must be less than 4.5MB.');
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('title', chinaFormData.title);
+            formData.append('description', chinaFormData.description);
+            formData.append('category', chinaFormData.category || '');
+            formData.append('subCategory', chinaFormData.subCategory || '');
+            formData.append('moq', chinaFormData.moq || 1);
+            formData.append('stock', chinaFormData.stock || 1000);
+            formData.append('shipFromChina', 'true');
+            formData.append('adminPrice', JSON.stringify(chinaFormData.adminPrice));
+            formData.append('imageUrls', JSON.stringify(chinaFormData.imageUrls || []));
+            formData.append('variations', JSON.stringify(chinaFormData.variations || []));
+            formData.append('tieredPricing', JSON.stringify(chinaFormData.tieredPricing || []));
+            chinaImages.forEach(file => formData.append('images', file));
+            const headers = getAuthHeader();
+            delete headers['Content-Type'];
+            await axios.post(`${API_BASE_URL}/api/products/admin/add`, formData, { headers });
+            setIsChinaCreating(false); setChinaImages([]);
+            setChinaFormData({ title: '', description: '', category: '', subCategory: '', moq: 1, stock: 1000, adminPrice: { IN: '', US: '', UK: '', CA: '', AU: '', UAE: '', INTL: '' }, imageUrls: [], variations: [], tieredPricing: [], shipFromChina: true });
+            fetchApproved(); alert('Product listed successfully!');
+        } catch (err) { alert('Listing failed: ' + (err.response?.data?.error || err.message)); }
+    };
+
+    const handleDeleteProduct = async (productId) => {
+        if (!window.confirm('Are you sure you want to delete this product?')) return;
+        try {
+            await axios.delete(`${API_BASE_URL}/api/products/admin/delete/${productId}`, { headers: getAuthHeader() });
+            alert('Product deleted successfully');
+            fetchApproved();
+            fetchPending();
+            fetchDashboardStats();
+        } catch (err) {
+            alert('Deletion failed: ' + (err.response?.data?.error || err.message));
+        }
+    };
+
     // --- Handler: open edit modal for an approved product ---
     const handleOpenApprovedEdit = (product) => {
         setEditingApprovedProduct(product);
         setApprovedEditData({
+            shipFromChina: product.shipFromChina || false,
             title: product.title || '',
             description: product.description || '',
             category: product.category || '',
@@ -290,6 +354,7 @@ const AdminDashboard = () => {
                 CA: product.adminPrice?.CA || '',
                 AU: product.adminPrice?.AU || '',
                 UAE: product.adminPrice?.UAE || '',
+                INTL: product.adminPrice?.INTL || '',
             }
         });
     };
@@ -300,7 +365,7 @@ const AdminDashboard = () => {
         setApprovedEditSaving(true);
         try {
             const payload = {
-                title: approvedEditData.title,
+                shipFromChina: approvedEditData.shipFromChina, title: approvedEditData.title,
                 description: approvedEditData.description,
                 category: approvedEditData.category,
                 subCategory: approvedEditData.subCategory,
@@ -323,6 +388,7 @@ const AdminDashboard = () => {
                     CA: parseFloat(approvedEditData.prices.CA) || 0,
                     AU: parseFloat(approvedEditData.prices.AU) || 0,
                     UAE: parseFloat(approvedEditData.prices.UAE) || 0,
+                    INTL: parseFloat(approvedEditData.prices.INTL) || 0,
                 }
             };
             const res = await axios.put(
@@ -369,8 +435,7 @@ const AdminDashboard = () => {
         { label: 'Sellers', icon: Users, path: '/admin/sellers' },
         { label: 'Buyers', icon: UserCheck, path: '/admin/buyers' },
         { label: 'Influencer Videos', icon: Video, path: '/admin/videos' },
-        { label: 'Shipping Calculator', icon: Truck, path: '/admin/shipping-calculator' },
-        { label: 'Commission Settings', icon: BadgePercent, path: '/admin/settings' },
+        { label: 'Ship from China', icon: Globe, path: '/admin/china' },
     ];
 
     if (loading) {
@@ -618,6 +683,7 @@ const AdminDashboard = () => {
                                                             onClick={() => {
                                                                 setEditingProduct(p._id);
                                                                 setApprovalData({
+                                                                    shipFromChina: p.shipFromChina || false,
                                                                     adminPrice: p.sellerPrice + (p.sellerPrice * (commission / 100)),
                                                                     commission: commission,
                                                                     title: p.title,
@@ -633,12 +699,13 @@ const AdminDashboard = () => {
                                                                     tieredPricing: p.tieredPricing || [],
 
                                                                     prices: {
-                                                                        IN: p.sellerPrice, // ðŸ‡®ðŸ‡³ Default from seller price
+                                                                        IN: p.sellerPrice, // 🇮🇳 Default from seller price
                                                                         US: '',
                                                                         UK: '',
                                                                         CA: '',
                                                                         AU: '',
-                                                                        UAE: ''
+                                                                        UAE: '',
+                                                                        INTL: ''
                                                                     }
                                                                 });
                                                             }}
@@ -741,34 +808,7 @@ const AdminDashboard = () => {
                         <Route path="/payouts" element={<PayoutsView />} />
                         <Route path="/orders" element={<OrdersView orders={orders} />} />
                         <Route path="/videos" element={<AdminInfluencerVideos />} />
-                        <Route path="/shipping-calculator" element={<ShippingCalculator />} />
-                        <Route path="/settings" element={
-                            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden max-w-2xl">
-                                <div className="px-8 py-6 border-b border-slate-100 bg-slate-50/50">
-                                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight">Platform Settings</h2>
-                                </div>
-                                <div className="p-8">
-                                    <div className="mb-6">
-                                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest block mb-2">Default Commission Rate (%)</label>
-                                        <div className="flex space-x-4">
-                                            <input
-                                                type="number"
-                                                value={commissionInput}
-                                                onChange={(e) => setCommissionInput(e.target.value)}
-                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
-                                            />
-                                            <button
-                                                onClick={handleUpdateCommission}
-                                                className="bg-primary text-white px-6 rounded-xl font-black uppercase text-xs hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
-                                            >
-                                                Update
-                                            </button>
-                                        </div>
-                                        <p className="text-xs text-slate-400 mt-2 font-medium">This percentage will be applied as the default admin fee for new product approvals.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        } />
+                        <Route path="/china" element={<AdminChinaView products={approvedProducts.filter(p => p.shipFromChina)} onEdit={handleOpenApprovedEdit} onAddNew={() => setIsChinaCreating(true)} />} />
                     </Routes>
                 </main>
             </div>
@@ -784,18 +824,31 @@ const AdminDashboard = () => {
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Edit Title (Marketplace Display)</label>
                                 <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
-                                    value={approvalData.title} onChange={e => setApprovalData({ ...approvalData, title: e.target.value })} />
+                                    value={approvalData.title} onChange={e => setApprovalData({ ...approvalData, title: e.target.value })} /></div><div className='flex items-center space-x-2 bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4'><input type='checkbox' id='shipFromChina' className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' checked={approvalData.shipFromChina} onChange={e => setApprovalData({ ...approvalData, shipFromChina: e.target.checked })} /><label htmlFor='shipFromChina' className='text-sm font-bold text-blue-700'>Ship from China (Global Import Portal only)</label>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Category</label>
-                                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
-                                        value={approvalData.category} onChange={e => setApprovalData({ ...approvalData, category: e.target.value })} />
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Category</label>
+                                    <select className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700 text-xs"
+                                        value={chinaFormData.category} onChange={e => setChinaFormData({ ...chinaFormData, category: e.target.value, subCategory: '' })}>
+                                        <option value="">Select Category</option>
+                                        {CATEGORIES_LIST.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                                    </select>
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Stock</label>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Sub Category</label>
+                                    <select className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700 text-xs"
+                                        value={chinaFormData.subCategory} onChange={e => setChinaFormData({ ...chinaFormData, subCategory: e.target.value })}>
+                                        <option value="">Select Sub Category</option>
+                                        {CATEGORIES_LIST.find(c => c.name === chinaFormData.category)?.subCategories.map(sc => (
+                                            <option key={sc.name} value={sc.name}>{sc.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Stock</label>
                                     <input type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
-                                        value={approvalData.stock} onChange={e => setApprovalData({ ...approvalData, stock: e.target.value })} />
+                                        value={chinaFormData.stock} onChange={e => setChinaFormData({ ...chinaFormData, stock: e.target.value })} />
                                 </div>
                             </div>
                             <div>
@@ -831,12 +884,13 @@ const AdminDashboard = () => {
                                 </label>
 
                                 {[
-                                    { code: "IN", symbol: "₹" },
+                                    { code: "IN", symbol: "?" },
                                     { code: "US", symbol: "$" },
-                                    { code: "UK", symbol: "Â£" },
+                                    { code: "UK", symbol: "£" },
                                     { code: "CA", symbol: "C$" },
                                     { code: "AU", symbol: "A$" },
-                                    { code: "UAE", symbol: "AD " }
+                                    { code: "UAE", symbol: "AD " },
+                                    { code: "INTL", symbol: "$" }
                                 ].map((country) => (
                                     <div key={country.code} className="flex items-center mb-2">
 
@@ -1048,7 +1102,7 @@ const AdminDashboard = () => {
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Title</label>
                                 <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
-                                    value={approvedEditData.title} onChange={e => setApprovedEditData({ ...approvedEditData, title: e.target.value })} />
+                                    value={approvedEditData.title} onChange={e => setApprovedEditData({ ...approvedEditData, title: e.target.value })} /></div><div className='flex items-center space-x-2 bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4'><input type='checkbox' id='editShipFromChina' className='w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500' checked={approvedEditData.shipFromChina} onChange={e => setApprovedEditData({ ...approvedEditData, shipFromChina: e.target.checked })} /><label htmlFor='editShipFromChina' className='text-sm font-bold text-blue-700'>Ship from China (Global Import Portal only)</label>
                             </div>
 
                             {/* Description */}
@@ -1110,7 +1164,7 @@ const AdminDashboard = () => {
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Shipping Dimensions</label>
                                 <div className="grid grid-cols-4 gap-3">
-                                    {[['weight','Weight (kg)'],['length','Length (cm)'],['breadth','Breadth (cm)'],['height','Height (cm)']].map(([field, label]) => (
+                                    {[['weight', 'Weight (kg)'], ['length', 'Length (cm)'], ['breadth', 'Breadth (cm)'], ['height', 'Height (cm)']].map(([field, label]) => (
                                         <div key={field}>
                                             <label className="text-[9px] font-bold text-slate-400 uppercase block mb-1">{label}</label>
                                             <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary font-bold text-sm text-slate-700"
@@ -1123,7 +1177,7 @@ const AdminDashboard = () => {
                             {/* Country-Wise Prices */}
                             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Country Prices</label>
-                                {[{code:'IN',symbol:'\u20B9'},{code:'US',symbol:'$'},{code:'UK',symbol:'\u00A3'},{code:'CA',symbol:'C$'},{code:'AU',symbol:'A$'},{code:'UAE',symbol:'AED'}].map(country => (
+                                {[{ code: 'IN', symbol: '\u20B9' }, { code: 'US', symbol: '$' }, { code: 'UK', symbol: '\u00A3' }, { code: 'CA', symbol: 'C$' }, { code: 'AU', symbol: 'A$' }, { code: 'UAE', symbol: 'AED' }, { code: 'INTL', symbol: '$' }].map(country => (
                                     <div key={country.code} className="flex items-center mb-2">
                                         <span className="w-10 text-xs font-bold text-slate-500">{country.code}</span>
                                         <div className="relative flex-1">
@@ -1176,7 +1230,7 @@ const AdminDashboard = () => {
                                             <tbody className="divide-y divide-slate-200/50 font-medium text-slate-600">
                                                 {approvedEditData.tieredPricing.map((tp, idx) => (
                                                     <tr key={idx}>
-                                                        {['moq','price','length','breadth','height','weight'].map(field => (
+                                                        {['moq', 'price', 'length', 'breadth', 'height', 'weight'].map(field => (
                                                             <td key={field} className="py-1 pr-1">
                                                                 <input type="number"
                                                                     className="w-[60px] px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary text-slate-700 font-bold text-xs"
@@ -1212,6 +1266,81 @@ const AdminDashboard = () => {
                                     Cancel
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {isChinaCreating && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[110] p-4 overflow-y-auto">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 max-h-[92vh] overflow-y-auto my-4">
+                        <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-slate-200 flex items-center justify-between rounded-t-2xl">
+                            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                                <PlusCircle size={18} className="text-primary" /> New China Product
+                            </h2>
+                            <button onClick={() => setIsChinaCreating(false)} className="text-slate-400 hover:text-slate-600 transition">
+                                <XCircle size={22} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Product Title</label>
+                                <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                    value={chinaFormData.title} onChange={e => setChinaFormData({ ...chinaFormData, title: e.target.value })} />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Description</label>
+                                <textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-medium text-slate-700 h-24"
+                                    value={chinaFormData.description} onChange={e => setChinaFormData({ ...chinaFormData, description: e.target.value })} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Category</label>
+                                    <input type="text" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={chinaFormData.category} onChange={e => setChinaFormData({ ...chinaFormData, category: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5">Stock</label>
+                                    <input type="number" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-bold text-slate-700"
+                                        value={chinaFormData.stock} onChange={e => setChinaFormData({ ...chinaFormData, stock: e.target.value })} />
+                                </div>
+                            </div>
+                            <div className="bg-slate-50/50 p-4 rounded-xl border border-dashed border-slate-300 relative group">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 text-center">Upload New Images</label>
+                                <input type="file" multiple accept="image/*" onChange={e => setChinaImages(Array.from(e.target.files))} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                                <div className="flex flex-col items-center justify-center p-2 text-slate-500 group-hover:text-primary transition">
+                                    <PlusCircle size={24} className="mb-1" />
+                                    <p className="text-[10px] font-bold">{chinaImages.length > 0 ? `${chinaImages.length} images selected` : 'Click or Drag to Upload'}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Product Image URLs (Alternative)</label>
+                                <textarea className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-primary font-medium text-slate-700 h-20 resize-none"
+                                    placeholder="Example: https://img.com/1.jpg, https://img.com/2.jpg"
+                                    value={chinaFormData.imageUrls.join(', ')}
+                                    onChange={e => setChinaFormData({ ...chinaFormData, imageUrls: e.target.value.split(',').map(s => s.trim()).filter(s => s) })} />
+                                {chinaFormData.imageUrls.length > 0 && (
+                                    <div className="flex gap-2 mt-2 overflow-x-auto pb-2 no-scrollbar">
+                                        {chinaFormData.imageUrls.map((img, idx) => (
+                                            <div key={idx} className="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0 border border-slate-200 overflow-hidden p-1">
+                                                <img src={img} alt="" className="w-full h-full object-contain" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Country Prices (Admin View)</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {['IN', 'US', 'UK', 'CA', 'AU', 'UAE', 'INTL'].map(c => (
+                                        <div key={c} className="flex flex-col">
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase mb-1">{c}</span>
+                                            <input type="number" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-primary font-bold text-xs"
+                                                value={chinaFormData.adminPrice[c]} onChange={e => setChinaFormData({ ...chinaFormData, adminPrice: { ...chinaFormData.adminPrice, [c]: e.target.value } })} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <button onClick={handleCreateChinaProduct} className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase text-xs shadow-lg shadow-blue-500/30 hover:bg-blue-600 transition">Submit Product</button>
                         </div>
                     </div>
                 </div>
@@ -1591,6 +1720,7 @@ const ApprovedProductsView = ({ products, onToggleTrending, onEdit }) => {
                                     >
                                         <Edit2 size={12} /> Edit
                                     </button>
+                                    <button onClick={() => { if (window.confirm("Delete product permanently?")) { axios.delete(`${API_BASE_URL}/api/products/admin/delete/${p._id || p.id}`, { headers: getAuthHeader() }).then(() => window.location.reload()); } }} className="flex items-center gap-1 bg-red-50 text-red-600 px-2 py-1 rounded text-[10px] font-black uppercase mt-1 ml-auto"><Trash2 size={12} /> Delete</button>
                                 </td>
                             </tr>
                         )) : (
@@ -1766,4 +1896,68 @@ const PayoutsView = () => {
     );
 };
 
+const AdminChinaView = ({ products, onEdit, onAddNew }) => {
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div className="flex items-center space-x-3">
+                    <Globe className="text-primary" size={24} />
+                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Ship from China Portal</h2>
+                </div>
+                <button
+                    onClick={onAddNew}
+                    className="bg-primary text-white text-xs font-black uppercase px-6 py-2.5 rounded-xl hover:bg-blue-600 transition flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                >
+                    <PlusCircle size={18} /> Add China Product
+                </button>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400">
+                        <tr>
+                            <th className="px-6 py-3">Product</th>
+                            <th className="px-6 py-3">Category</th>
+                            <th className="px-6 py-3 text-right">Base Price (IN)</th>
+                            <th className="px-6 py-3 text-center">Stock</th>
+                            <th className="px-6 py-3 text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-xs">
+                        {products.length > 0 ? products.map(p => (
+                            <tr key={p._id} className="hover:bg-slate-50">
+                                <td className="px-6 py-4">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-8 h-8 rounded bg-slate-100 p-1 flex-shrink-0">
+                                            <img src={p.imageUrls?.[0]} alt="" className="w-full h-full object-contain" />
+                                        </div>
+                                        <span className="font-bold text-slate-700">{p.title}</span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-slate-500 font-bold">{p.category}</td>
+                                <td className="px-6 py-4 text-right font-black text-slate-700">&#8377;{typeof p.adminPrice === 'object' ? p.adminPrice?.IN : p.adminPrice}</td>
+                                <td className="px-6 py-4 text-center font-bold text-slate-600">{p.stock}</td>
+                                <td className="px-6 py-4 text-right">
+                                    <button onClick={() => onEdit(p)} className="p-2 text-slate-400 hover:text-primary transition">
+                                        <Edit2 size={16} />
+                                    </button>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 font-bold italic">No China products found. Add your first listing now.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 export default AdminDashboard;
+
+
+
+
+
+
+
+

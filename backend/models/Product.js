@@ -5,16 +5,29 @@ const productSchema = new mongoose.Schema({
     description: { type: String, required: true },
     category: { type: String, required: true },
     subCategory: { type: String }, // New field for sub-categorization
-    hsnCode: { type: String, required: true, minlength: 6 },
-    gstPercentage: { type: Number, required: true },
+    hsnCode: {
+        type: String,
+        required: function () { return !this.shipFromChina; },
+        validate: {
+            validator: function (v) {
+                if (this.shipFromChina) return true;
+                return v && v.length >= 6;
+            },
+            message: props => `${props.value} is not a valid HSN code! Must be at least 6 characters.`
+        }
+    },
+    gstPercentage: {
+        type: Number,
+        required: function () { return !this.shipFromChina; }
+    },
     sellerPrice: { type: Number },
-    adminPrice:  {
+    adminPrice: {
         IN: { type: Number },   // India
         US: { type: Number },   // United States
         UK: { type: Number },   // United Kingdom
         CA: { type: Number },   // Canada
         AU: { type: Number },   // Australia
-        UAE: { type: Number } , // UAE 
+        UAE: { type: Number }, // UAE 
     },
     commission: { type: Number, default: 0 },
     sellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -43,7 +56,8 @@ const productSchema = new mongoose.Schema({
         breadth: { type: Number },
         height: { type: Number },
         weight: { type: Number }
-    }]
+    }],
+    shipFromChina: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Product', productSchema);
